@@ -26,6 +26,10 @@ on:
       max_fhr:
         description: "Last forecast hour (multiple of 6)"
         default: "168"
+      fresh_data:
+        description: "Ignore the cached model downloads and finished data files and fetch everything again"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -58,20 +62,40 @@ jobs:
         if: inputs.probe
         continue-on-error: true
 
-      # Natural Earth downloads (~40 MB, once).  Model data is never cached or committed: it is fetched, reduced to the New England
-      # display grid, and only the result is published.
+      # Natural Earth downloads (~40 MB, once).
       - uses: actions/cache@v4
         if: ${{ !inputs.probe }}
         with:
-          path: .cache
-          key: static-v1-${{ hashFiles('ensemble_snow/gis.py') }}
-          restore-keys: static-v1-
+          path: .cache/ne
+          key: static-v2-${{ hashFiles('ensemble_snow/gis.py') }}
+          restore-keys: static-v2-
+
+      # Model data kept between runs so that a change to the page (or to the statistics) does not download the model again:
+      #   .cache/decoded  the newest EPS / GEFS / GEPS download already reduced to the New England grid (~100-200 MB instead of ~18 GB of GRIB)
+      #   .cache/bundles  the finished data files of the last build (~10 MB), reused when only the page changed
+      # GitHub caches are immutable, so every run that changes the data saves a new snapshot; the newest one is restored and GitHub
+      # evicts the oldest ones on its own.  Nothing of this is committed or published.
+      - name: Restore cached model data
+        if: ${{ !inputs.probe }}
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .cache/decoded
+            .cache/bundles
+          key: data-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: data-${{ runner.os }}-
+
+      - name: Remember what the cache holds
+        id: cache_before
+        if: ${{ !inputs.probe }}
+        run: echo "sig=$(find .cache/decoded .cache/bundles -type f -printf '%p %s\n' 2>/dev/null | sort | sha1sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - name: Build site
         id: build
         if: ${{ !inputs.probe }}
         env:
           FORCE: ${{ inputs.force }}
+          FRESH: ${{ inputs.fresh_data }}
           ENSEMBLES: ${{ inputs.ensembles || 'eps,gefs,geps' }}
           MAX_FHR: ${{ inputs.max_fhr || '168' }}
           TQDM_DISABLE: "1"          # no download progress bars: they made the log ~100x larger and hid the real messages
@@ -79,8 +103,26 @@ jobs:
           pages_url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
           skip=(--skip-if-deployed "$pages_url")
           [ "$FORCE" = "true" ] && skip=()
+          [ "$FRESH" = "true" ] && skip+=(--no-cache)
           python -m ensemble_snow.build --out public --cache .cache --ensembles "$ENSEMBLES" --max-fhr "$MAX_FHR" "${skip[@]}"
           if [ -f public/index.html ]; then echo "publish=true" >> "$GITHUB_OUTPUT"; else echo "publish=false" >> "$GITHUB_OUTPUT"; fi
+
+      # Save the model data even when a later step failed (a retry then does not download again).  Skipped when nothing changed.
+      - name: Check whether the cache changed
+        id: cache_after
+        if: ${{ always() && !inputs.probe }}
+        run: |
+          now=$(find .cache/decoded .cache/bundles -type f -printf '%p %s\n' 2>/dev/null | sort | sha1sum | cut -c1-16)
+          if [ "$now" != "${{ steps.cache_before.outputs.sig }}" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Save model data for the next run
+        if: ${{ always() && !inputs.probe && steps.cache_after.outputs.changed == 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .cache/decoded
+            .cache/bundles
+          key: data-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - uses: actions/configure-pages@v5
         if: steps.build.outputs.publish == 'true'
