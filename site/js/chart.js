@@ -1,4 +1,4 @@
-// Fan chart of the ensemble at one point: P10-P90 and P25-P75 bands, median, mean and maximum.
+// Fan chart of the ensemble at one point: P5-P95, P10-P90 and P25-P75 bands, median, mean and maximum.
 // It is also the time control: click or drag to pick a time, arrow keys step through times.
 
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -29,7 +29,7 @@ export class FanChart {
     });
   }
 
-  // data: { times: [ms], fhr: [h], series: {p10,p25,p50,p75,p90,mean,max: Float32Array}, unit, label }
+  // data: { times: [ms], fhr: [h], series: {min,p5,p10,p25,p50,mean,p75,p90,p95,max,...: Float32Array}, label }
   setData(d) { this.data = d; this.draw(); }
   setIndex(i) { this.idx = i; this.draw(); }
 
@@ -48,7 +48,7 @@ export class FanChart {
   showTip(e) {
     const d = this.data, i = this.hover;
     if (!d || i < 0) { this.tip.hidden = true; return; }
-    const s = d.series, rows = [["90th", s.p90], ["Median", s.p50], ["10th", s.p10], ["Mean", s.mean], ["Max", s.max]];
+    const s = d.series, rows = [["Max", s.max], ["95th", s.p95], ["90th", s.p90], ["Median", s.p50], ["Mean", s.mean], ["10th", s.p10], ["5th", s.p5], ["Min", s.min]];
     this.tip.innerHTML = `<div class="th">${stamp(d.times[i])}</div>` + rows.map(([n, a]) => `<div class="row"><span>${n}</span><b>${fmt(a[i])} in</b></div>`).join("");
     this.tip.hidden = false;
     const g = this.geom(), x = this.xOf(i, g), tw = this.tip.offsetWidth;
@@ -64,8 +64,8 @@ export class FanChart {
     c.font = '12px "Atkinson Hyperlegible Next", system-ui, sans-serif';
     if (!d) return;
     const s = d.series, n = d.times.length;
-    // scale to the 90th percentile; the maximum member can be several times larger and would flatten everything else, so it is clipped and labelled
-    const maxAll = Math.max(...s.max.filter(Number.isFinite), 0), top = niceMax(Math.max(...s.p90.filter(Number.isFinite), 0.5) * 1.2);
+    // scale to the 95th percentile; the maximum member can be several times larger and would flatten everything else, so it is clipped and labelled
+    const maxAll = Math.max(...s.max.filter(Number.isFinite), 0), top = niceMax(Math.max(...s.p95.filter(Number.isFinite), 0.5) * 1.15);
     const y = v => g.t + (1 - Math.min(v, top) / top) * (g.h - g.t - g.b);
     const hair = css("--hair"), ink2 = css("--ink-2"), ink3 = css("--ink-3"), accent = css("--accent-ink");
     // y grid and labels
@@ -87,7 +87,7 @@ export class FanChart {
       for (let i = n - 1; i >= 0; i--) c.lineTo(this.xOf(i, g), y(lo[i]));
       c.closePath(); c.fillStyle = col; c.fill();
     };
-    band(s.p10, s.p90, css("--band-a")); band(s.p25, s.p75, css("--band-b"));
+    band(s.p5, s.p95, css("--band-c")); band(s.p10, s.p90, css("--band-a")); band(s.p25, s.p75, css("--band-b"));
     const line = (a, col, w, dash) => {
       c.beginPath(); c.setLineDash(dash || []); c.strokeStyle = col; c.lineWidth = w; c.lineJoin = "round";
       for (let i = 0; i < n; i++) c[i ? "lineTo" : "moveTo"](this.xOf(i, g), y(a[i]));
@@ -101,7 +101,7 @@ export class FanChart {
     const x = this.xOf(this.idx, g);
     c.strokeStyle = css("--ink"); c.lineWidth = 1.5; c.beginPath(); c.moveTo(x, g.t - 4); c.lineTo(x, g.h - g.b); c.stroke();
     c.fillStyle = accent; c.strokeStyle = css("--surface"); c.lineWidth = 2;
-    c.beginPath(); c.arc(x, y(s.p50[this.idx]), 4.5, 0, 7); c.fill(); c.stroke();
+    if (Number.isFinite(s.p50[this.idx])) { c.beginPath(); c.arc(x, y(s.p50[this.idx]), 4.5, 0, 7); c.fill(); c.stroke(); }
     if (this.hover >= 0 && this.hover !== this.idx) { c.strokeStyle = ink3; c.lineWidth = 1; c.beginPath(); c.moveTo(this.xOf(this.hover, g), g.t); c.lineTo(this.xOf(this.hover, g), g.h - g.b); c.stroke(); }
     // legend, direct in the chart
     c.textAlign = "left"; c.textBaseline = "middle"; let lx = g.l, ly = 9;
@@ -112,12 +112,13 @@ export class FanChart {
     key("Max", (x0, y0) => { c.strokeStyle = ink3; c.lineWidth = 1.25; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + 16, y0); c.stroke(); c.setLineDash([]); });
     key("25–75%", (x0, y0) => { c.fillStyle = css("--band-b"); c.fillRect(x0, y0 - 5, 16, 10); });
     key("10–90%", (x0, y0) => { c.fillStyle = css("--band-a"); c.fillRect(x0, y0 - 5, 16, 10); });
+    key("5–95%", (x0, y0) => { c.fillStyle = css("--band-c"); c.fillRect(x0, y0 - 5, 16, 10); });
     if (document.activeElement === cv) { c.strokeStyle = css("--focus"); c.lineWidth = 2; c.strokeRect(1, 1, g.w - 2, g.h - 2); }
   }
 }
 
 export function tableHtml(d) {
-  const s = d.series, cols = [["10th", "p10"], ["25th", "p25"], ["Median", "p50"], ["75th", "p75"], ["90th", "p90"], ["Mean", "mean"], ["Max", "max"]];
+  const s = d.series, cols = [["Min", "min"], ["5th", "p5"], ["10th", "p10"], ["25th", "p25"], ["Median", "p50"], ["Mean", "mean"], ["75th", "p75"], ["90th", "p90"], ["95th", "p95"], ["Max", "max"], ["PMM", "pmm"], ["LPMM", "lpmm"], ["SAM", "sam"], ["SAM–LPM", "samlpm"]];
   let h = `<table><caption class="sr">${d.label}, inches, at the chosen point</caption><thead><tr><th scope="col">Valid time</th>${cols.map(c => `<th scope="col">${c[0]}</th>`).join("")}</tr></thead><tbody>`;
   for (let i = 0; i < d.times.length; i++) h += `<tr><th scope="row">${stamp(d.times[i])}</th>${cols.map(c => `<td>${fmt(s[c[1]][i])}</td>`).join("")}</tr>`;
   return h + "</tbody></table>";
