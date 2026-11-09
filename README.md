@@ -150,3 +150,12 @@ tests/               pytest (+ node decoder check)
 ## Credits and licences
 
 Forecast data: ECMWF open data (CC BY 4.0), NOAA/NCEP (US government work), ECCC/MSC (Open Government Licence – Canada). Basemap: Natural Earth (public domain). Places and peaks: GeoNames (CC BY 4.0) and the lists inherited from the reference RRFS winter viewer. Leaflet (BSD-2-Clause) and Atkinson Hyperlegible Next (SIL OFL 1.1) are vendored with their licences. SLR formulas are generalised from that reference project; see the references in `ensemble_snow/slr.py`.
+
+## Terrain adjustment (experimental, off by default)
+
+The models see smooth terrain (about 25 km boxes for the ECMWF and GEFS data, 50 km for the GEPS data), so a ridge and the valley beside it get the same snow. Tick **Terrain adjustment** in the controls to scale the snowfall by elevation:
+
+- `ensemble_snow/terrain.py` reads ground heights (AWS Terrarium tiles, zoom 8, about 600 m), averages them to 0.05° cells and, for each model grid, subtracts the same heights averaged over the model's box. The result, the relief in metres, goes to `data/terrain.json` (about 250 kB). The finished height array is kept in `.cache/dem`.
+- `site/js/terrain.js` multiplies amounts by `1 + strength/100 × relief/100`, limited to 0.5–2. The default strength is 6 % per 100 m and the slider goes from 0 to 15. Chances of at least X inches use the model's chance of at least X divided by the factor, interpolated between the thresholds. The snow-to-liquid ratio is not changed.
+- It rescales snow the model already has. It cannot move a storm, change rain to snow or add snow where the model has none. The strength is a rule of thumb that has not been fitted to observations; compare it against snow reports before relying on it.
+- If the height download fails, the build continues without it and the control is hidden.

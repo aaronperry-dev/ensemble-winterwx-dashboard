@@ -5,3 +5,4 @@ ecmwf-opendata>=0.3.9  # ECMWF open-data client (AWS mirror by default)
 requests>=2.31
 pyshp>=2.3             # Natural Earth shapefiles for the basemap
 shapely>=2.0
+pillow>=10            # decoding the terrain tiles
