@@ -40,7 +40,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 210
     outputs:
       publish: ${{ steps.build.outputs.publish }}
     steps:
