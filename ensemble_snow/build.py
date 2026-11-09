@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import compute, config, consensus, encode, gis, slr, stats
+from . import compute, config, consensus, encode, gis, slr, stats, terrain
 from .fields import EnsembleData
 from .sources.base import forecast_steps
 
@@ -261,9 +261,12 @@ def _hash_files(root: Path, paths) -> str:
 _ROOT = Path(__file__).resolve().parent.parent
 
 
+_NOT_MODEL_DATA = ("gis.py", "terrain.py")           # the basemap and the terrain file are made after, and apart from, the model data files
+
+
 def pipeline_fingerprint() -> str:
     """Hash of the Python pipeline only.  The finished data files depend on nothing else (not on the page), so they are reused when it is unchanged."""
-    return _hash_files(_ROOT, (_ROOT / "ensemble_snow").rglob("*.py"))
+    return _hash_files(_ROOT, [p for p in (_ROOT / "ensemble_snow").rglob("*.py") if p.name not in _NOT_MODEL_DATA])
 
 
 def code_fingerprint() -> str:
@@ -412,7 +415,7 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
         if manifest:
             log.info("reusing the data files built earlier from the same code and model runs: only the page is new")
             manifest["fingerprint"] = fingerprint
-            return _finish_site(out, manifest, cache, with_gis)
+            return _finish_site(out, manifest, cache, with_gis, synthetic, fetcher)
 
     manifest_ens, kept = {}, {}
     ffp = fetch_fingerprint()
@@ -454,12 +457,16 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
             save_bundles(bdir, out, manifest)
         except Exception:
             log.exception("could not cache the finished data files (the build goes on)")
-    return _finish_site(out, manifest, cache, with_gis)
+    return _finish_site(out, manifest, cache, with_gis, synthetic, fetcher)
 
 
-def _finish_site(out: Path, manifest: dict, cache: Path, with_gis: bool) -> dict:
-    """Write the manifest, copy the page, build the GIS layers."""
+def _finish_site(out: Path, manifest: dict, cache: Path, with_gis: bool, synthetic: bool = False, fetcher=None) -> dict:
+    """Write the manifest, copy the page, build the terrain file and the GIS layers."""
     (out / "data").mkdir(parents=True, exist_ok=True)
+    manifest.pop("terrain", None)
+    terr = terrain.build(out / "data", cache, synthetic, fetcher) if with_gis else None
+    if terr:
+        manifest["terrain"] = terr
     (out / "data" / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")))
     site = _ROOT / "site"
     if site.exists():
