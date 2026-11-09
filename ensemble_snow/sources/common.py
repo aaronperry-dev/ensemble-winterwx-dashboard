@@ -51,8 +51,9 @@ def water_scale(msg: Msg) -> float:
     return 1000.0 if u in ("m", "m**1") else 1.0
 
 
-def resolve_accumulation(msgs_by_step: dict[int, list[Msg]], members: list[int], steps: list[int]) -> dict[int, np.ndarray] | None:
-    """Total-since-initialisation (mm, native grid) per step from messages that may carry bucketed windows."""
+def resolve_accumulation(msgs_by_step: dict[int, list[Msg]], members: list[int], steps: list[int], scale: float | None = None) -> dict[int, np.ndarray] | None:
+    """Total-since-initialisation (mm, native grid) per step from messages that may carry bucketed windows.
+    ``scale`` overrides the factor to millimetres that would otherwise be read from the unit the GRIB library reports."""
     out: dict[int, np.ndarray] = {}
     trackers = None
     src = None
@@ -60,7 +61,7 @@ def resolve_accumulation(msgs_by_step: dict[int, list[Msg]], members: list[int],
         msgs = msgs_by_step[f]
         if not msgs:
             continue
-        arr, lat, lon = stack(msgs, members, water_scale(msgs[0]))
+        arr, lat, lon = stack(msgs, members, water_scale(msgs[0]) if scale is None else scale)
         src = (lat, lon)
         a, b = msgs[0].step_range
         if trackers is None:
@@ -78,9 +79,9 @@ def resolve_accumulation(msgs_by_step: dict[int, list[Msg]], members: list[int],
     return {"series": res, "axes": src}
 
 
-def assemble_precip(msgs_by_step: dict[int, list[Msg]], members: list[int], steps: list[int]):
+def assemble_precip(msgs_by_step: dict[int, list[Msg]], members: list[int], steps: list[int], scale: float | None = None):
     """-> {fhr: display-grid cumulative precipitation (M, ny, nx)} or {} when nothing usable."""
-    r = resolve_accumulation(msgs_by_step, members, steps)
+    r = resolve_accumulation(msgs_by_step, members, steps, scale)
     if not r:
         return {}
     lat, lon = r["axes"]

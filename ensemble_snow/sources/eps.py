@@ -158,13 +158,26 @@ class EpsSource:
         members = sorted(common.member_ids(first_tp))
         notes: list[str] = []
 
-        def cumulative(short):
+        def cumulative(short, scale):
             tp_by_step = {s: pick(by_step[s][0], short) for s in steps if s > 0}
             tp_by_step = {s: v for s, v in tp_by_step.items() if v}
-            return common.assemble_precip(tp_by_step, members, steps) if tp_by_step else {}
+            return common.assemble_precip(tp_by_step, members, steps, scale) if tp_by_step else {}
 
-        precip = cumulative("tp")
-        snow = cumulative("sf")
+        # ECMWF publishes both accumulations in metres of water.  The unit the GRIB library *reports* is not reliable for ``sf`` (ecCodes calls
+        # it "kg m**-2" but "m" for ``tp``), and reading metres as millimetres made every snowfall 1000 times too small, i.e. zero.  So both
+        # are converted from metres, and the result is checked: snowfall is part of the precipitation, so it can never exceed it.
+        precip = cumulative("tp", 1000.0)
+        snow = cumulative("sf", 1000.0)
+        if precip and snow:
+            last = max(set(precip) & set(snow), default=None)
+            if last is not None:
+                p_max, s_max = float(np.nanmax(precip[last])), float(np.nanmax(snow[last]))
+                units = {k: (pick(by_step[last][0], k) or [None])[0] for k in ("tp", "sf")}
+                log.info("EPS precipitation / snowfall at F+%d h as read: max %.2f / %.2f mm (units reported by ecCodes: %s / %s)", last, p_max, s_max,
+                         getattr(units["tp"], "units", "?"), getattr(units["sf"], "units", "?"))
+                if s_max > 1.2 * p_max + 1.0:
+                    log.warning("EPS snowfall exceeds the precipitation after converting from metres: reading it as millimetres instead")
+                    snow = cumulative("sf", 1.0)
         if not snow:
             notes.append("ECMWF snowfall (sf) not found; precipitation type estimated from the 2 m wet-bulb temperature")
 
