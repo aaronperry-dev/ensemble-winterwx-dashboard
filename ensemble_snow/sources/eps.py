@@ -131,13 +131,14 @@ class EpsSource:
     def _task(self, cycle, step, have: set[tuple[str, str]]):
         has = (lambda p, lt: not have or (p, lt) in have)
         sfc_params = [p for p in ("tp", "sf", "2t", "2d", "sp") if has(p, "sfc")]
-        pl_params = [p for p in ("t", "r") if has(p, "pl")]
         z_param = "gh" if has("gh", "pl") else ("z" if has("z", "pl") else None)
-        if z_param:
-            pl_params.append(z_param)
         sfc = self._get(cycle, step, "sfc", sfc_params) if sfc_params else []
-        levels = sorted(set(config.T_LEVELS) | set(config.RH_LEVELS) | set(config.Z_LEVELS))
-        pl = self._get(cycle, step, "pl", pl_params, levels) if pl_params else []
+        # one request per variable, each at only the levels the SLR methods use (t: 6, r: 5, height: 3 = 14 fields per member instead of 18)
+        pl = []
+        if step % config.EPS_PL_STEP_H == 0:             # upper-air fields are 3/4 of the download: fetched every 6 h, interpolated in between
+            for param, levels in (("t", config.T_LEVELS), ("r", config.RH_LEVELS), (z_param, config.Z_LEVELS)):
+                if param and has(param, "pl"):
+                    pl += self._get(cycle, step, "pl", [param], sorted(levels))
         return step, sfc, pl
 
     def load(self, cycle: datetime, steps: list[int], workers: int = 6) -> EnsembleData:
@@ -190,6 +191,10 @@ class EpsSource:
                 z = {p: a for p in config.Z_LEVELS if (a := disp(pl, "z", p, scale=1.0 / G)) is not None}
             kw["z"] = common.profile(z)
             out_steps.append(common.finish_step(s, **{k: v for k, v in kw.items() if v is not None}))
+        fetched = {s for s in steps if by_step[s][1]}
+        if len(fetched) < len(steps):
+            common.fill_profiles(out_steps, fetched)
+            notes.append(f"ECMWF upper-air fields are used every {config.EPS_PL_STEP_H} h and interpolated in time for the 3-hourly steps in between")
         if out_steps and out_steps[-1].ps_hpa is None:
             notes.append("EPS: surface pressure not available; every pressure level is treated as above ground")
         return EnsembleData("eps", cycle, members, out_steps, notes)

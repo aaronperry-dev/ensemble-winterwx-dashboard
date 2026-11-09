@@ -105,6 +105,33 @@ def profile(levels_arrays: dict[int, np.ndarray]) -> Profile | None:
     return Profile(lv, np.stack([levels_arrays[l] for l in lv]))
 
 
+def blend_profiles(a: Profile | None, b: Profile | None, f: float) -> Profile | None:
+    """Profile a fraction ``f`` of the way from ``a`` to ``b`` (linear in time); ``a`` alone when ``b`` is missing."""
+    if a is None or b is None or a.levels != b.levels:
+        return a
+    return Profile(a.levels, ((1.0 - f) * a.data + f * b.data).astype(np.float32))
+
+
+def fill_profiles(steps: list, have_profiles: set[int]) -> None:
+    """Steps whose upper-air fields were not downloaded (``fhr`` not in ``have_profiles``) get temperature, humidity and height profiles
+    interpolated in time between the nearest steps that have them.  Beyond the last such step the profile is held."""
+    known = sorted(f for f in have_profiles)
+    by_fhr = {st.fhr: st for st in steps}
+    for st in steps:
+        if st.fhr in have_profiles or not known:
+            continue
+        before = [f for f in known if f < st.fhr]
+        after = [f for f in known if f > st.fhr]
+        lo = by_fhr[before[-1]] if before else None
+        hi = by_fhr[after[0]] if after else None
+        if lo is None and hi is None:
+            continue
+        f = 0.0 if lo is None or hi is None else (st.fhr - lo.fhr) / (hi.fhr - lo.fhr)
+        lo = lo or hi
+        for name in ("t", "rh", "z"):
+            setattr(st, name, blend_profiles(getattr(lo, name), getattr(hi if hi is not None else lo, name), f))
+
+
 def stack_dict(d: dict[int, Msg], members: list[int], scale: float = 1.0, offset: float = 0.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Like :func:`stack`, for messages whose member number is known from where they came from (one file per member)."""
     ref = next(iter(d.values()))
