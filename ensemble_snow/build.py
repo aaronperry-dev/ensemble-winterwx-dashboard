@@ -175,10 +175,25 @@ def method_info() -> dict:
     return info
 
 
+def describe_input(ens: EnsembleData) -> None:
+    """One log line per system saying what the download contains, so an empty field is obvious at a glance."""
+    def top(attr):
+        v = [getattr(s, attr) for s in ens.steps if getattr(s, attr) is not None]
+        if not v:
+            return "none"
+        a = np.nanmax(v[-1]) if v else float("nan")
+        return f"max {a:.1f} mm in {int(np.sum(np.nanmax(v[-1], axis=0) > 0.1)) if np.ndim(v[-1]) == 3 else 0} grid points"
+    log.info("%s input at F+%d h: %d members, total precipitation %s, model snowfall %s, 2 m temperature %s; type from: %s", ens.key, ens.steps[-1].fhr,
+             len(ens.members), top("precip_cum_mm"), top("snow_liq_cum_mm"), "present" if ens.steps[-1].t2m_k is not None else "MISSING", ens.ptype_source or "n/a")
+
+
 def process_ensemble(ens: EnsembleData, out: Path, grid_lat, grid_lon, keep: dict | None = None) -> dict:
     spec = config.ENSEMBLES[ens.key]
+    describe_input(ens)
     LON, LAT = np.meshgrid(grid_lon, grid_lat)
     res = compute.compute_snowfall(ens, LAT, LON)
+    log.info("%s result: highest member snowfall by F+%d h (blend) %.1f in, %d of %d grid points above 0.1 in", ens.key, res.fhrs[-1],
+             float(np.nanmax(res.methods["blend"][-1])), int(np.sum(np.nanmax(res.methods["blend"][-1], axis=0) > 0.1)), LAT.size)
     (out / "data").mkdir(parents=True, exist_ok=True)
     files = {}
     order = ["blend"] + [k for k in slr.METHODS if k in res.methods]
@@ -233,16 +248,113 @@ def combine(kept: dict, out: Path) -> dict | None:
 
 
 # --------------------------------------------------------------------------- site
-def code_fingerprint() -> str:
-    """Hash of the pipeline and viewer sources: a code change rebuilds the site even when the model cycle has not changed."""
+def _hash_files(root: Path, paths) -> str:
     import hashlib
-    root = Path(__file__).resolve().parent.parent
     h = hashlib.sha1()
-    for p in sorted([*(root / "ensemble_snow").rglob("*.py"), *(root / "site").rglob("*")]):
+    for p in sorted(paths):
         if p.is_file() and "vendor" not in p.parts and "__pycache__" not in p.parts:
             h.update(p.relative_to(root).as_posix().encode())
             h.update(p.read_bytes())
     return h.hexdigest()[:12]
+
+
+_ROOT = Path(__file__).resolve().parent.parent
+
+
+def pipeline_fingerprint() -> str:
+    """Hash of the Python pipeline only.  The finished data files depend on nothing else (not on the page), so they are reused when it is unchanged."""
+    return _hash_files(_ROOT, (_ROOT / "ensemble_snow").rglob("*.py"))
+
+
+def code_fingerprint() -> str:
+    """Hash of the pipeline and viewer sources: a code change rebuilds the site even when the model cycle has not changed."""
+    return _hash_files(_ROOT, [*(_ROOT / "ensemble_snow").rglob("*.py"), *(_ROOT / "site").rglob("*")])
+
+
+def fetch_fingerprint() -> str:
+    """Hash of what decides the content of a *decoded download*: the fetchers, the GRIB reader, the regridder and the grid / level settings.
+    The snow-ratio, statistics and consensus code are deliberately not in it, so changing them does not trigger a new download."""
+    import hashlib
+    pkg = _ROOT / "ensemble_snow"
+    files = [*(pkg / "sources").glob("*.py"), *(pkg / n for n in ("grib.py", "regrid.py", "accum.py", "thermo.py", "http.py", "fields.py"))]
+    h = hashlib.sha1(_hash_files(_ROOT, files).encode())
+    for name in ("GRID_LON0", "GRID_LON1", "GRID_LAT0", "GRID_LAT1", "GRID_STEP", "CROP_PAD_DEG", "T_LEVELS", "RH_LEVELS", "Z_LEVELS", "EPS_PL_STEP_H"):
+        h.update(f"{name}={getattr(config, name, None)!r}".encode())
+    return h.hexdigest()[:12]
+
+
+# --------------------------------------------------------------------------- caches (kept between CI runs by actions/cache)
+def _use_cache_for_reading() -> bool:
+    return os.environ.get("ENSNOW_NO_CACHE", "").lower() not in ("1", "true", "yes")
+
+
+def _decoded_path(cache: Path, key: str, cycle: datetime, steps: list[int], ffp: str) -> Path:
+    import hashlib
+    sig = hashlib.sha1(",".join(map(str, steps)).encode()).hexdigest()[:6]
+    return cache / "decoded" / f"{key}_{cycle:%Y%m%d%H}_{sig}_{ffp}.pkl.gz"
+
+
+def load_decoded(path: Path) -> EnsembleData | None:
+    """A previously downloaded and decoded ensemble (on the display grid, ~100 MB for EPS instead of ~18 GB of GRIB), or None."""
+    import gzip
+    import pickle
+    if not path.exists() or not _use_cache_for_reading():
+        return None
+    try:
+        with gzip.open(path, "rb") as f:
+            ens = pickle.load(f)
+        return ens if isinstance(ens, EnsembleData) else None
+    except Exception as exc:
+        log.warning("could not read the cached download %s (%s); downloading again", path.name, exc)
+        return None
+
+
+def save_decoded(path: Path, ens: EnsembleData) -> None:
+    import gzip
+    import pickle
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    with gzip.open(tmp, "wb", compresslevel=3) as f:
+        pickle.dump(ens, f, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp.replace(path)
+    for old in path.parent.glob(f"{ens.key}_*.pkl.gz"):             # keep only the newest download of each system: the cache stays small
+        if old != path:
+            old.unlink(missing_ok=True)
+    log.info("cached the %s download (%.0f MB)", ens.key, path.stat().st_size / 1e6)
+
+
+def _bundle_dir(cache: Path, pfp: str, cycles: dict[str, datetime], max_fhr: int) -> Path:
+    sig = "-".join(f"{k}{t:%Y%m%d%H}" for k, t in sorted(cycles.items()))
+    return cache / "bundles" / f"{pfp}_{sig}_f{max_fhr}"
+
+
+def restore_bundles(src: Path, out: Path) -> dict | None:
+    """Finished data files of an earlier build of the same pipeline code and model runs, copied into ``out/data``; returns their manifest."""
+    mf = src / "manifest.json"
+    if not mf.exists() or not _use_cache_for_reading():
+        return None
+    try:
+        manifest = json.loads(mf.read_text())
+        files = [e["file"] for ens in manifest["ensembles"].values() for e in ens["files"].values()]
+        if not all((src / f).exists() for f in files):
+            return None
+        (out / "data").mkdir(parents=True, exist_ok=True)
+        for f in files:
+            shutil.copy2(src / f, out / "data" / f)
+        return manifest
+    except Exception as exc:
+        log.warning("could not reuse the cached data files (%s); rebuilding", exc)
+        return None
+
+
+def save_bundles(dst: Path, out: Path, manifest: dict) -> None:
+    if dst.parent.exists():
+        shutil.rmtree(dst.parent, ignore_errors=True)                 # one set only
+    dst.mkdir(parents=True, exist_ok=True)
+    for ens in manifest["ensembles"].values():
+        for e in ens["files"].values():
+            shutil.copy2(out / "data" / e["file"], dst / e["file"])
+    (dst / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")))
 
 
 def already_deployed(url: str, cycles: dict[str, datetime], fingerprint: str, fetcher=None) -> bool:
@@ -264,7 +376,8 @@ def already_deployed(url: str, cycles: dict[str, datetime], fingerprint: str, fe
 
 
 def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cache: Path, force_cycle: datetime | None, common: bool,
-               workers: int, with_gis: bool = True, now: datetime | None = None, fetcher=None, skip_if_deployed: str | None = None) -> dict | None:
+               workers: int, with_gis: bool = True, now: datetime | None = None, fetcher=None, skip_if_deployed: str | None = None,
+               use_cache: bool | None = None) -> dict | None:
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     lon, lat = config.grid_axes()
     if synthetic:
@@ -287,15 +400,38 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
     if skip_if_deployed and not synthetic and already_deployed(skip_if_deployed, cycles, fingerprint):
         log.info("the live site already shows %s; nothing to do", {k: f"{t:%Y-%m-%d %H}Z" for k, t in cycles.items()})
         return None
+    use_cache = (not synthetic) if use_cache is None else use_cache
     steps = forecast_steps(max_fhr, config.OUT_STEP_H, True, config.COARSE_AFTER_H, config.COARSE_STEP_H)
-    manifest_ens, kept = {}, {}
     out.mkdir(parents=True, exist_ok=True)
+
+    # Same pipeline code and same model runs as an earlier build (only the page changed): reuse its finished data files, nothing to download or compute.
+    pfp = pipeline_fingerprint()
+    bdir = _bundle_dir(cache, pfp, cycles, max_fhr)
+    if use_cache and set(cycles) == set(keys):
+        manifest = restore_bundles(bdir, out)
+        if manifest:
+            log.info("reusing the data files built earlier from the same code and model runs: only the page is new")
+            manifest["fingerprint"] = fingerprint
+            return _finish_site(out, manifest, cache, with_gis)
+
+    manifest_ens, kept = {}, {}
+    ffp = fetch_fingerprint()
     for k in keys:
         if k not in cycles:
             continue
         log.info("=== %s  %s ===", k, cycles[k])
         try:
-            ens = sources[k].load(cycles[k], steps, workers)
+            dpath = _decoded_path(cache, k, cycles[k], steps, ffp)
+            ens = load_decoded(dpath) if use_cache else None
+            if ens is not None:
+                log.info("%s: using the download cached from an earlier build (no data fetched)", k)
+            else:
+                ens = sources[k].load(cycles[k], steps, workers)
+                if use_cache:
+                    try:
+                        save_decoded(dpath, ens)
+                    except Exception:
+                        log.exception("%s: could not cache the download (the build goes on)", k)
             manifest_ens[k] = process_ensemble(ens, out, lat, lon, kept)
         except Exception:
             log.exception("%s failed; continuing without it", k)
@@ -312,9 +448,20 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
         "out_step": config.OUT_STEP_H, "amt_step": config.AMT_STEP_IN, "slr_step": config.SLR_STEP,
         "methods": method_info(), "ensembles": manifest_ens,
     }
-    (out / "data" / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")))
+    if use_cache and set(keys) <= set(manifest_ens) and set(cycles) == set(keys):           # a build missing a system is not worth reusing
+        (out / "data").mkdir(parents=True, exist_ok=True)
+        try:
+            save_bundles(bdir, out, manifest)
+        except Exception:
+            log.exception("could not cache the finished data files (the build goes on)")
+    return _finish_site(out, manifest, cache, with_gis)
 
-    site = Path(__file__).resolve().parent.parent / "site"
+
+def _finish_site(out: Path, manifest: dict, cache: Path, with_gis: bool) -> dict:
+    """Write the manifest, copy the page, build the GIS layers."""
+    (out / "data").mkdir(parents=True, exist_ok=True)
+    (out / "data" / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")))
+    site = _ROOT / "site"
     if site.exists():
         shutil.copytree(site, out, dirs_exist_ok=True)
     if with_gis:
@@ -373,6 +520,7 @@ def main(argv=None) -> int:
     ap.add_argument("--independent", action="store_true", help="use each system's own newest run instead of a common initialisation time")
     ap.add_argument("--synthetic", action="store_true", help="demo data (no network for the models)")
     ap.add_argument("--no-gis", action="store_true")
+    ap.add_argument("--no-cache", action="store_true", help="ignore the cached downloads and finished data files (they are still refreshed)")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--probe", action="store_true", help="only report which forecast runs are on the servers")
     ap.add_argument("--skip-if-deployed", metavar="URL", help="exit without building when the site at URL already shows the newest runs from the same code")
@@ -386,6 +534,8 @@ def main(argv=None) -> int:
     if a.probe:
         return probe(keys, a.max_fhr)
     start_resource_monitor()
+    if a.no_cache:
+        os.environ["ENSNOW_NO_CACHE"] = "1"
     force = datetime.strptime(a.cycle, "%Y%m%d%H") if a.cycle else None
     build_site(Path(a.out), keys, synthetic=a.synthetic, max_fhr=a.max_fhr, cache=Path(a.cache), force_cycle=force, common=not a.independent,
                workers=a.workers, with_gis=not a.no_gis, skip_if_deployed=a.skip_if_deployed)
