@@ -110,7 +110,11 @@ class EpsSource:
             try:
                 src = self.sources[(attempt - 1) % len(self.sources)]
                 self._client_retrieve(source=src, target=path, **req)
-                msgs = list(iter_file(path))
+                try:
+                    msgs = list(iter_file(path))
+                except Exception as exc:                  # the file arrived but cannot be read: another download would not help
+                    log.error("EPS step %s %s: downloaded from %s but could not be decoded: %s", step, levtype, src, exc)
+                    return []
                 log.info("EPS step %3s %s: %d messages (from %s)", step, levtype, len(msgs), src)
                 return msgs
             except Exception as exc:

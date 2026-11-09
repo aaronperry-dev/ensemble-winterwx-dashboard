@@ -44,14 +44,28 @@ def _axes(ec, gid):
     ni, nj, la1, la2, lo1, lo2 = key
     if _get(ec, gid, "gridType") not in ("regular_ll", "regular_gg") and ni is None:
         raise ValueError("only regular lat/lon GRIB grids are supported")
-    lat = np.linspace(la1, la2, nj)
-    lon = np.linspace(lo1, lo2, ni)
+    lat, lon = None, None
+    if ni and nj:
+        try:                                    # ask ecCodes for the geometry itself: right for any scanning mode and any key quirk
+            lats = np.asarray(ec.codes_get_array(gid, "latitudes"), np.float64)
+            lons = np.asarray(ec.codes_get_array(gid, "longitudes"), np.float64)
+            if lats.size == ni * nj:
+                lat, lon = lats[::ni], lons[:ni]
+        except Exception:
+            lat = lon = None
+    if lat is None:
+        lat = np.linspace(la1, la2, nj)
+        lon = np.linspace(lo1, lo2, ni)
     lon = np.where(lon > 180.0, lon - 360.0, lon)
     flip_lat = lat[0] > lat[-1]
     lat_a = lat[::-1] if flip_lat else lat
     lon_order = np.argsort(lon)
     lon_a = lon[lon_order]
-    ys, xs = crop_slices(lat_a, lon_a)
+    try:
+        ys, xs = crop_slices(lat_a, lon_a)
+    except ValueError as exc:
+        raise ValueError(f"{exc} (gridType={_get(ec, gid, 'gridType')}, Ni={ni}, Nj={nj}, lat {lat_a[0]:.3f}..{lat_a[-1]:.3f}, "
+                         f"lon {lon_a[0]:.3f}..{lon_a[-1]:.3f}, shortName={_get(ec, gid, 'shortName')})") from None
     out = (flip_lat, lon_order, ys, xs, lat_a[ys].astype(np.float64), lon_a[xs].astype(np.float64), nj, ni)
     _axes_cache[key] = out
     return out
