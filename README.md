@@ -4,26 +4,28 @@ A static dashboard for snowfall percentiles and probabilities across New England
 
 | System | Centre | Members | Source used here |
 |---|---|---|---|
-| **EPS** (ENS) | ECMWF | 51 | ECMWF open data, AWS mirror (`ecmwf-opendata`), CC BY 4.0 |
+| **EPS** (ENS) | ECMWF | 50 or 51 (the open-data index may omit the control member) | ECMWF open data, AWS mirror (`ecmwf-opendata`), CC BY 4.0 |
 | **GEFS** | NOAA/NCEP | 31 | `noaa-gefs-pds` on AWS, byte-range reads guided by `.idx` files |
 | **GEPS** | ECCC/CMC | 21 | MSC Datamart (`dd.weather.gc.ca`), Open Government Licence – Canada |
 
 A Python pipeline turns each run into compact files; a vanilla-JS page (Leaflet, no CDN, no framework) shows them on a pannable, zoomable map with a vector basemap and GIS layers. GitHub Actions rebuilds the site after each 00/12 UTC run and deploys it to GitHub Pages. **No forecast data is committed to git.**
 
 ```
-fetch GRIB2 ──► regrid to 0.25° New England grid ──► snow per member per SLR method ──► percentiles / mean / max / P(≥ x in)
+fetch GRIB2 ──► regrid to 0.25° New England grid ──► snow per member per SLR method ──► percentiles / mean / PMM / LPMM / SAM / SAM–LPM / P(≥ x in)
                                                                                          │
                           Pages artifact  ◄── manifest.json + one gzip bundle per (system, method) ◄┘
 ```
 
 ## What the page shows
 
-* **Amount** – 10th, 25th, 50th, 75th, 90th percentile, mean or maximum snowfall, as a run total or a rolling 24 h total, every 6 h to F+168.
-* **Chance** – the share of members reaching 1, 3, 6, 12, 18 or 24 in.
-* **Ratio** – the effective snow-to-liquid ratio of the chosen method (median member).
-* Ensemble: EPS, GEFS, GEPS, or **All** (the three pooled; each system carries equal total weight, so the 21 GEPS members count for more apiece than the 51 EPS members).
+* **Amount** – the minimum, 5th, 10th, 25th, 50th (median), mean, 75th, 90th, 95th percentile or maximum member, for an accumulation period of **3, 6, 12, 24 or 48 hours, or the run total**. Time is a **slider in 3-hour steps** to F+144 h, then 6-hourly to F+168 h (ECMWF publishes 6-hourly fields after F+144 h, so 3-hour totals end there). A period only appears at times when it is complete: a 24-hour total starts at F+24 h.
+* **Consensus** – four ways of drawing one map that keeps realistic amounts (see below): **PMM**, **LPMM**, **SAM** and **SAM–LPM**.
+* **Chance** – the share of members reaching 0.1, 1, 2, 3, 4, 6, 8, 12, 18 or 24 in in the chosen period (the edges of the NWS snowfall legend).
+* **Ratio** – the effective snow-to-liquid ratio of the chosen method (mean member).
+* Colours: snowfall uses the NWS "Total Snow Forecast" legend of the Portland/Gray office (sampled from its map) in both appearances; chances use ColorBrewer **BuPu**, a cool sequential ramp that cannot be mistaken for the amounts.
+* Ensemble: EPS, GEFS, GEPS, or **All** (the three pooled; each system carries equal total weight, so the 21 GEPS members count for more apiece than the 50-51 EPS members).
 * Snow-to-liquid method (see below), per system.
-* A bottom dock with a **fan chart** (10–90 % and 25–75 % bands, median, mean, maximum) for the point you click. The chart is also the time control: click or drag it, or use ←/→. A table view of the same numbers is one button away.
+* A bottom dock with the time slider and a **fan chart** (5–95 %, 10–90 % and 25–75 % bands, median, mean, maximum) for the point you click. The chart is a second time control (click or drag it); ←/→ step the slider. A table view of all 14 statistics at the point is one button away.
 * Layers: counties, state lines, highways with route shields, towns, peaks, ski areas. Light and dark appearance. All state is in the URL hash, so a view can be shared.
 
 ## Run it locally
@@ -53,11 +55,11 @@ python -m ensemble_snow.build --ensembles gefs --max-fhr 96 --workers 16
 2. Run **Actions → Update snowfall ensemble dashboard → Run workflow** once with *probe* ticked to check the data sources, then once with *force* ticked to build and publish.
 3. After that the workflow runs by itself at about 08:30 and 20:30 UTC (the time the 00/12 UTC ECMWF run is out), with retries an hour and two later. An attempt that finds the live site already showing the newest runs from the same code finishes in about a minute without deploying (`--skip-if-deployed`). A push to `main` rebuilds too.
 
-The deployed site is a few MB of static files: the page, vendored Leaflet and font, ~100 kB of GIS JSON (loaded lazily) and, per (system, method), a bundle of roughly 150–250 kB that the browser fetches only when selected.
+The deployed site is about 60 MB of static files: the page, vendored Leaflet and font, ~100 kB of GIS JSON (loaded lazily) and, per (system, method), a bundle of about 1.4–1.8 MB (it holds every period, statistic and time; about 60 MB for all four systems) that the browser fetches only when selected.
 
 ## Snow-to-liquid ratio (SLR) methods
 
-Snow depth = Σ over 6 h intervals of (snow-type liquid) × (SLR). The snow-type liquid comes from the model's own snow accumulation or precipitation-type flag where it has one (EPS `sf`, GEPS `ASNOW` when it passes a unit check, GEFS `CSNOW`), otherwise from a wet-bulb ramp (all snow at Tw ≤ 0 °C, none at ≥ 2 °C). Ratios are evaluated at both ends of an interval and averaged. Every ratio is clipped to 3–40:1.
+Snow depth = Σ over the 3 h (6 h late in the run) intervals of (snow-type liquid) × (SLR). The snow-type liquid comes from the model's own snow accumulation or precipitation-type flag where it has one (EPS `sf`, GEPS `ASNOW` when it passes a unit check, GEFS `CSNOW`), otherwise from a wet-bulb ramp (all snow at Tw ≤ 0 °C, none at ≥ 2 °C). Ratios are evaluated at both ends of an interval and averaged. Every ratio is clipped to 3–40:1.
 
 | Key | Method | Needs | Notes |
 |---|---|---|---|
@@ -91,9 +93,23 @@ Optionally add the key to `config.BLEND` to include it in the consensus, and add
 ## Data pipeline details
 
 * **Grid.** −75…−65 °E, 40…48 °N at 0.25° (41 × 33 cells). Native fields are cropped and bilinearly regridded with two matrix products.
-* **Accumulation.** Totals since initialisation are rebuilt from each GRIB message's `stepRange`, handling both from-start and 6-hourly-bucket conventions.
+* **Accumulation.** Totals since initialisation are rebuilt from each GRIB message's `stepRange`, handling both from-start and 6-hourly-bucket conventions. Any 3, 6, 12, 24 or 48 h window is the difference of two totals.
 * **Files.** `data/manifest.json` lists systems, methods, grid, times and files. Each `data/<system>_<method>.bin.gz` is an `ESN1` bundle (gzip → JSON header → 2-D-delta, byte-shuffled, quantised blocks: amounts 0.05 in, probabilities 1 %, ratios 0.2). `site/js/bundle.js` decodes it; `tests/test_viewer_bundle.py` checks the JavaScript against the Python encoder.
 * **Statistics** are computed in Python over members (Hazen percentiles, weighted for the pooled view), so the browser never sees individual members.
+* **ECMWF upper-air fields** (temperature, humidity, height: about three quarters of that download) are fetched every 6 h and interpolated in time for the 3-hourly steps in between; surface fields (precipitation, snowfall, 2 m temperature, dew point, pressure) are fetched every 3 h. Change `EPS_PL_STEP_H` in `config.py` to 3 to fetch everything (about 50 % more data).
+
+## Consensus products: PMM, LPMM, SAM, SAM–LPM
+
+All four are computed in `ensemble_snow/consensus.py` for every method, period and time, on the display grid, and shipped as ordinary fields. The plain mean smooths snowfall where members disagree about the storm track, so its peaks are too low and its swath too wide. These products repair that:
+
+| Product | What it does | Source |
+|---|---|---|
+| **PMM** | Keeps the *pattern* of the ensemble mean and refits its *values* to the pooled distribution of every member over the map (the n-th largest mean receives the n-th largest pooled value). | Ebert 2001; NWS FDTD guide |
+| **LPMM** | The same, patch by patch: 5 × 5-cell patches (about 140 × 100 km) take their pool from the 3 × 3 patches around them (about 375 km), so snow from one storm is not given to another. `LPMM_PATCH_CELLS` | Clark 2017; Snook et al. 2020 |
+| **SAM** | Each member is moved toward the PMM by a smooth displacement field found in two passes (24-cell then 9-cell patches, search ±6 then ±3 cells, SOAR penalty on long shifts, α = 0.1), its own distribution of values is restored, and the moved members are averaged. `SAM_PASSES`, `SAM_ALPHA` | Lee et al. 2024, *Weather and Forecasting* 39, 1545–1558 |
+| **SAM–LPM** | The aligned members combined by LPM instead of averaged. | Lee et al. 2024 |
+
+Choices the papers leave open are mine: the patch sizes are the paper's 600 km and 225 km converted to this coarse grid (and its member-to-mean alignment); amounts are square-root transformed above 0.01 in before matching; and **the displacement fields are found once per period and time on the multi-method snowfall and applied to every method's members** (a storm's position error does not depend on the snow-to-liquid ratio), which keeps the cost independent of the number of methods. The pooled "All" view uses the member weights throughout. These maps are consensus pictures: they do not conserve totals and are not the likeliest outcome at each point, so the page says to use percentiles and chances for point decisions.
 
 ## Status of the data fetchers (read this)
 
