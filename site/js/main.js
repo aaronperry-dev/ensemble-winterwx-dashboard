@@ -1,3 +1,4 @@
+import { adjustAmount, adjustChance, factor, loadTerrain } from "./terrain.js";
 import { loadBundle, extract, series, sample } from "./bundle.js";
 import { scales } from "./colors.js";
 import { FieldLayer } from "./field-layer.js";
@@ -31,8 +32,8 @@ const DEFAULT_PT = [42.3584, -71.0598];
 const DAYS = d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
 const winText = w => (w ? `${w}-hour` : "storm-total");
 
-const S = { ens: "eps", method: "blend", prod: "pct", stat: "p50", cons: "pmm", thr: 1, win: 0, t: 0, pt: DEFAULT_PT, smooth: true, opacity: 0.85, dark: false, layers: new Set(LAYERS.filter(l => l[2]).map(l => l[0])) };
-let M, GRID, map, field, gis, chart, scale, bundle, places = [], playing = null, token = 0;
+const S = { ens: "eps", method: "blend", prod: "pct", stat: "p50", cons: "pmm", thr: 1, win: 0, t: 0, pt: DEFAULT_PT, smooth: true, terrain: false, tk: 6, opacity: 0.85, dark: false, layers: new Set(LAYERS.filter(l => l[2]).map(l => l[0])) };
+let TERR = null, M, GRID, map, field, gis, chart, scale, bundle, places = [], playing = null, token = 0;
 const cache = new Map();
 
 // ---------- state in the URL ----------
@@ -42,7 +43,7 @@ function readHash() {
   return o;
 }
 function writeHash() {
-  const c = map.getCenter(), p = new URLSearchParams({ e: S.ens, m: S.method, p: S.prod, s: S.stat, c: S.cons, k: S.thr, w: S.win, t: S.t, pt: S.pt.map(v => v.toFixed(3)).join(","), v: `${c.lat.toFixed(3)},${c.lng.toFixed(3)},${map.getZoom()}`, l: [...S.layers].join(".") });
+  const c = map.getCenter(), p = new URLSearchParams({ e: S.ens, m: S.method, p: S.prod, s: S.stat, c: S.cons, k: S.thr, w: S.win, t: S.t, pt: S.pt.map(v => v.toFixed(3)).join(","), v: `${c.lat.toFixed(3)},${c.lng.toFixed(3)},${map.getZoom()}`, l: [...S.layers].join("."), ta: S.terrain ? 1 : 0, tk: S.tk });
   history.replaceState(null, "", "#" + p);
 }
 
@@ -98,16 +99,29 @@ function scaleFor() { const sc = scales(S.dark); return S.prod === "prob" ? sc.p
 
 function paint() {
   scale = scaleFor();
-  S.values = extract(bundle, currentSpec(), GRID);
-  field.setData({ values: S.values, grid: GRID, scale, smooth: S.smooth });
+  const spec = currentSpec();
+  let out = { values: extract(bundle, spec, GRID), grid: GRID };
+  if (terrainActive()) {
+    const dz = terrainDz();
+    out = spec.kind === "prob"
+      ? adjustChance(M.thresholds.map((_, k) => extract(bundle, { ...spec, k }, GRID)), M.thresholds, spec.k, GRID, TERR, dz, S.tk)
+      : adjustAmount(out.values, GRID, TERR, dz, S.tk);
+  }
+  S.values = out.values; S.vgrid = out.grid;
+  field.setData({ values: S.values, grid: S.vgrid, scale, smooth: S.smooth });
   legend(); timeLabels();
 }
 
+// Terrain adjustment applies to snowfall amounts and chances, not to the snow-to-liquid ratio.
+const terrainActive = () => !!(S.terrain && TERR && S.prod !== "slr");
+const terrainDz = () => TERR.dz[M.terrain.smooth[S.ens]] || Object.values(TERR.dz)[0];
+const pointFactor = (lat, lon) => (terrainActive() ? factor(sample(terrainDz(), TERR.grid, lat, lon) || 0, S.tk) : 1);
+
 function describe() {
-  const w = winText(activeWin());
-  if (S.prod === "pct") { const st = PCT.find(x => x[0] === S.stat); return { title: `${st[2]} ${w} snowfall`, unit: "inches", note: st[3] }; }
-  if (S.prod === "cons") { const st = CONS.find(x => x[0] === S.cons); return { title: `${st[1]} ${w} snowfall`, unit: "inches", note: st[3] }; }
-  if (S.prod === "prob") return { title: `Chance of at least ${M.thresholds[S.thr]} in, ${w}`, unit: "% of members", note: "Share of ensemble members reaching the amount" };
+  const w = winText(activeWin()), ta = terrainActive() ? ", terrain-adjusted" : "";
+  if (S.prod === "pct") { const st = PCT.find(x => x[0] === S.stat); return { title: `${st[2]} ${w} snowfall`, unit: "inches" + ta, note: st[3] }; }
+  if (S.prod === "cons") { const st = CONS.find(x => x[0] === S.cons); return { title: `${st[1]} ${w} snowfall`, unit: "inches" + ta, note: st[3] }; }
+  if (S.prod === "prob") return { title: `Chance of at least ${M.thresholds[S.thr]} in, ${w}`, unit: "% of members" + ta, note: "Share of ensemble members reaching the amount" };
   return { title: "Effective snow-to-liquid ratio", unit: ":1", note: "Whole-run snow depth divided by snow-type liquid, mean member" };
 }
 
@@ -213,17 +227,19 @@ function setPoint(lat, lon) {
 let lastSeries;
 function updateChart() {
   const v = validIdx(), w = activeWin(), ser = series(bundle, GRID, S.pt[0], S.pt[1], winIndex()), sub = {};
-  for (const k of Object.keys(ser)) sub[k] = Float32Array.from(v, i => ser[k][i]);
-  const d = { times: v.map(validMs), fhr: v.map(i => E().fhrs[i]), idx: v, series: sub, label: w ? `${w}-hour snow ending at each time (in)` : "Snow since the run began (in)" };
+  const pf = pointFactor(S.pt[0], S.pt[1]);
+  for (const k of Object.keys(ser)) sub[k] = Float32Array.from(v, i => ser[k][i] * pf);
+  const ta = terrainActive() ? ", terrain-adj." : "";
+  const d = { times: v.map(validMs), fhr: v.map(i => E().fhrs[i]), idx: v, series: sub, label: w ? `${w}-hour snow ending at each time (in${ta})` : `Snow since the run began (in${ta})` };
   lastSeries = d; chart.setData(d); chart.setIndex(Math.max(0, v.indexOf(S.t)));
   if (!$("table-wrap").hidden) $("table-wrap").innerHTML = tableHtml(d);
 }
 function valueAt(lat, lon) {
   if (!S.smooth) {
-    const x = Math.round((lon - GRID.lon0) / GRID.dlon), y = Math.round((lat - GRID.lat0) / GRID.dlat);
-    return x < 0 || y < 0 || x >= GRID.nx || y >= GRID.ny ? NaN : S.values[y * GRID.nx + x];
+    const g = S.vgrid || GRID, x = Math.round((lon - g.lon0) / g.dlon), y = Math.round((lat - g.lat0) / g.dlat);
+    return x < 0 || y < 0 || x >= g.nx || y >= g.ny ? NaN : S.values[y * g.nx + x];
   }
-  return sample(S.values, GRID, lat, lon);
+  return sample(S.values, S.vgrid || GRID, lat, lon);
 }
 function showReadout(lat, lon) {
   const box = $("readout"), v = valueAt(lat, lon);
@@ -232,8 +248,8 @@ function showReadout(lat, lon) {
   const big = el("div", { className: "big" }, S.prod === "slr" ? v.toFixed(1) : fmt(v), el("small", {}, unit));
   const kids = [big];
   if (S.prod !== "slr") {
-    const ser = series(bundle, GRID, lat, lon, winIndex()), t = S.t;
-    kids.push(el("div", { className: "trio" }, ...[["10th", "p10"], ["Median", "p50"], ["90th", "p90"]].map(([n, k]) => el("span", {}, n + " ", el("b", {}, fmt(ser[k][t]))))));
+    const ser = series(bundle, GRID, lat, lon, winIndex()), t = S.t, pf = pointFactor(lat, lon);
+    kids.push(el("div", { className: "trio" }, ...[["10th", "p10"], ["Median", "p50"], ["90th", "p90"]].map(([n, k]) => el("span", {}, n + " ", el("b", {}, fmt(ser[k][t] * pf))))));
     kids.push(el("div", { className: "sub" }, `Snow range, ${winText(activeWin())}`));
   }
   box.replaceChildren(...kids);
@@ -254,6 +270,10 @@ function buildControls() {
   $("opacity").value = Math.round(S.opacity * 100);
   $("opacity").addEventListener("input", e => { S.opacity = e.target.value / 100; field.setOpacity(S.opacity); });
   $("smooth").checked = S.smooth;
+  const terr = () => { $("tk-val").textContent = S.tk; paint(); updateChart(); updateReadoutAtPoint(); writeHash(); };
+  $("terrain").checked = S.terrain; $("tk").value = S.tk; $("tk-val").textContent = S.tk;
+  $("terrain").addEventListener("change", e => { S.terrain = e.target.checked; terr(); });
+  $("tk").addEventListener("input", e => { S.tk = +e.target.value; if (S.terrain) terr(); else $("tk-val").textContent = S.tk; });
   $("smooth").addEventListener("change", e => { S.smooth = e.target.checked; paint(); });
   $("prev").onclick = () => { togglePlay(false); stepTime(-1); };
   $("next").onclick = () => { togglePlay(false); stepTime(1); };
@@ -342,6 +362,9 @@ function setTheme(dark) {
 async function start() {
   const res = await fetch("data/manifest.json"); M = await res.json(); GRID = M.grid;
   if (M.synthetic) $("demo-banner").hidden = false;
+  TERR = null;
+  if (M.terrain) { try { TERR = await loadTerrain(`data/${M.terrain.file}`); } catch (e) { console.error(e); } }
+  $("terrain-sec").hidden = !TERR; if (!TERR) S.terrain = false;
   const h = readHash();
   if (h.e && M.ensembles[h.e]) S.ens = h.e;
   if (h.m && M.methods[h.m] && E().methods.includes(h.m)) S.method = h.m;
@@ -354,6 +377,8 @@ async function start() {
   else S.t = Math.max(0, E().fhrs.indexOf(E().fhrs.find(f => f >= 48) ?? E().fhrs.at(-1)));
   S.t = snapTime(S.t);
   if (h.pt) { const q = h.pt.split(",").map(Number); if (q.length === 2 && q.every(Number.isFinite)) S.pt = q; }
+  if (h.ta === "1" && M.terrain) S.terrain = true;
+  if (h.tk !== undefined && +h.tk >= 0 && +h.tk <= 15) S.tk = +h.tk;
   if (h.l !== undefined) S.layers = new Set(h.l.split(".").filter(Boolean));
   let dark = matchMedia("(prefers-color-scheme: dark)").matches;
   try { const t = localStorage.getItem("ensnow-theme"); if (t) dark = t === "dark"; } catch {}
