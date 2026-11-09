@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New England snowfall ensembles</title>
+<meta name="description" content="Snowfall percentiles and probabilities for New England from the ECMWF, NCEP and Canadian ensembles, by several snow-to-liquid ratio methods.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2712%27 fill=%27%232a78d6%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#map">Skip to the map</a>
+<div id="demo-banner" hidden role="status">Synthetic demonstration data: a made-up storm, not a forecast.</div>
+
+<div class="app" id="app">
+  <header class="top">
+    <h1>New England snowfall ensembles</h1>
+    <p id="runline" class="runline" aria-live="polite"></p>
+    <button id="theme" class="ghost" type="button" aria-label="Switch between light and dark appearance">Dark</button>
+    <button id="rail-toggle" class="ghost only-narrow" type="button" aria-expanded="false" aria-controls="rail">Controls</button>
+  </header>
+
+  <aside class="rail" id="rail" aria-label="Map controls">
+    <section>
+      <h2 id="h-ens">Ensemble</h2>
+      <div id="ens" class="seg" role="radiogroup" aria-labelledby="h-ens"></div>
+      <p id="ens-note" class="fine"></p>
+    </section>
+
+    <section>
+      <h2 id="h-method">Snow-to-liquid method</h2>
+      <select id="method" aria-labelledby="h-method"></select>
+      <p id="method-desc" class="fine"></p>
+    </section>
+
+    <section>
+      <h2 id="h-prod">Show</h2>
+      <div id="prod" class="seg" role="radiogroup" aria-labelledby="h-prod"></div>
+      <div id="prod-opts" class="chips" role="radiogroup" aria-label="Statistic"></div>
+      <div id="win-wrap">
+        <h2 id="h-win">Accumulation</h2>
+        <div id="win" class="seg" role="radiogroup" aria-labelledby="h-win"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Map layers</h2>
+      <div id="layers" class="checks"></div>
+      <label class="slider"><span>Field opacity</span><input id="opacity" type="range" min="30" max="100" value="85"></label>
+      <label class="check"><input id="smooth" type="checkbox" checked><span>Smooth between grid cells</span></label>
+    </section>
+
+    <section class="credits">
+      <h2>Sources</h2>
+      <p id="credits" class="fine"></p>
+    </section>
+  </aside>
+
+  <main class="stage">
+    <div id="map" tabindex="0" aria-label="Map of New England snowfall. Drag to pan, scroll or use plus and minus to zoom."></div>
+    <div id="legend" class="legend" aria-hidden="false"></div>
+    <div id="readout" class="readout" aria-live="off"></div>
+    <div id="loading" class="loading" hidden>Loading</div>
+  </main>
+
+  <section class="dock" aria-label="Forecast time and ensemble spread at the chosen point">
+    <div class="dock-head">
+      <div class="transport" role="group" aria-label="Time">
+        <button id="prev" type="button" aria-label="Previous time">&lsaquo;</button>
+        <button id="play" type="button" aria-label="Play">Play</button>
+        <button id="next" type="button" aria-label="Next time">&rsaquo;</button>
+      </div>
+      <div class="when"><strong id="when-utc"></strong><span id="when-local"></span></div>
+      <div class="where"><strong id="where"></strong><span id="where-sub">Click the map to move the point</span></div>
+      <button id="table-btn" class="ghost" type="button" aria-pressed="false">Table</button>
+    </div>
+    <div class="dock-body">
+      <canvas id="chart" tabindex="0" role="img" aria-label="Ensemble spread of snowfall at the chosen point by forecast time. Left and right arrow keys change the time."></canvas>
+      <div id="chart-tip" class="tip" hidden></div>
+      <div id="table-wrap" class="table-wrap" hidden></div>
+    </div>
+  </section>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

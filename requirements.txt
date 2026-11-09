@@ -1,0 +1,7 @@
+numpy>=1.26
+scipy>=1.11
+eccodes>=2.36          # GRIB2 decoding (the pip wheel bundles the ecCodes library)
+ecmwf-opendata>=0.3.9  # ECMWF open-data client (AWS mirror by default)
+requests>=2.31
+pyshp>=2.3             # Natural Earth shapefiles for the basemap
+shapely>=2.0
