@@ -111,17 +111,28 @@ function describe() {
   return { title: "Effective snow-to-liquid ratio", unit: ":1", note: "Whole-run snow depth divided by snow-type liquid, mean member" };
 }
 
+const narrowQuery = matchMedia("(max-width: 860px)");
 function legend() {
   const d = describe(), sc = scale, box = $("legend");
-  const bar = el("div", { className: "bar" }), ticks = el("div", { className: "ticks" + (sc.labels ? " cls" : "") });
+  // Class ranges ("12–18") do not fit under a swatch on a phone, so there the numbers sit on the boundaries between swatches, as on a continuous legend.
+  const edgeLabels = !!sc.labels && narrowQuery.matches;
+  const bar = el("div", { className: "bar" }), ticks = el("div", { className: "ticks" + (sc.labels && !edgeLabels ? " cls" : "") });
   sc.colors.forEach((c, i) => {
     bar.append(el("i", { style: `background:${c}` }));
     const e = sc.edges[i];
-    ticks.append(el("span", {}, sc.labels ? sc.labels[i] : Number.isFinite(e) ? sc.fmt(e) + (i === sc.colors.length - 1 ? "+" : "") : ""));
+    ticks.append(el("span", {}, edgeLabels ? (i === 0 ? "" : sc.fmt(e)) : sc.labels ? sc.labels[i] : Number.isFinite(e) ? sc.fmt(e) + (i === sc.colors.length - 1 ? "+" : "") : ""));
   });
   box.replaceChildren(el("div", { className: "lt" }, d.title + " ", el("span", {}, `(${d.unit})`)), bar, ticks);
-  box.classList.toggle("lab", !!sc.labels); box.title = d.note;
+  box.classList.toggle("lab", !!sc.labels && !edgeLabels); box.title = d.note;
 }
+narrowQuery.addEventListener("change", () => { if (scale) legend(); });
+// On a phone the title and the Controls button share one row, so the appearance switch moves into the controls sheet.
+function placeTheme() {
+  const b = $("theme");
+  if (narrowQuery.matches) $("rail").querySelector(".sheet-head").insertBefore(b, $("rail-close"));
+  else document.querySelector(".top").insertBefore(b, $("rail-toggle"));
+}
+narrowQuery.addEventListener("change", placeTheme); addEventListener("DOMContentLoaded", placeTheme); placeTheme();
 
 // ---------- time ----------
 // S.t indexes the ensemble's full list of output hours.  A period is only complete at some of them (a 24-hour total first exists at F+24 h), so the
@@ -136,7 +147,9 @@ const localStamp = ms => {
 function timeLabels() {
   const ms = validMs(S.t), f = E().fhrs[S.t], w = activeWin(), v = validIdx(), pos = Math.max(0, v.indexOf(S.t));
   $("when-utc").textContent = `Valid ${stamp(ms)} · F+${String(f).padStart(3, "0")} h`;
-  $("when-local").textContent = (w ? `${w}-hour snow from ${stamp(ms - w * 3600e3)} to ${stamp(ms)}` : `Snow since the run began, ${stamp(Date.parse(E().init))}`) + ` · ${localStamp(ms)} in New England`;
+  // local time first: on a phone this line is cut to one row, and the clock time is what is wanted from it
+  const lt = localStamp(ms), what = w ? `${w}-hour snow from ${stamp(ms - w * 3600e3)} to ${stamp(ms)}` : `Snow since the run began, ${stamp(Date.parse(E().init))}`;
+  $("when-local").textContent = (lt ? `${lt} in New England · ` : "") + what; $("when-local").title = $("when-local").textContent;
   const t = $("time"); t.value = pos; t.setAttribute("aria-valuetext", `${stamp(ms)}, forecast hour ${f}`);
   chart?.setIndex(pos);
 }
@@ -148,13 +161,32 @@ function buildTime() {
     const d = new Date(validMs(i));
     if (d.getUTCHours() !== 0) return;
     const f = v.length > 1 ? k / (v.length - 1) : 0;
-    days.append(el("span", { style: `left: calc(8px + (100% - 16px) * ${f})` }, `${DAYS(d)} ${d.getUTCDate()}`));
+    const sp = el("span", { style: `left: calc(8px + (100% - 16px) * ${f})` }, `${DAYS(d)} ${d.getUTCDate()}`);
+    Object.assign(sp.dataset, { f: String(f), long: `${DAYS(d)} ${d.getUTCDate()}`, short: DAYS(d) });
+    days.append(sp);
   });
+  layoutDays();
   const w = activeWin(), hrs = v.map(i => E().fhrs[i]);
   $("win-note").textContent = !v.length ? "" : w
     ? `${w}-hour totals are complete from F+${hrs[0]} h to F+${hrs.at(-1)} h${hrs.at(-1) < E().fhrs.at(-1) ? `; after that this system publishes ${w < 6 ? "only 6-hourly" : "too coarse"} fields` : ""}.`
     : "Snow from the start of the run to each time.";
 }
+// Weekday and date under the slider where they fit, the weekday alone where they do not, and no label that would touch its neighbour.
+function layoutDays() {
+  const days = $("days"), spans = [...days.children], w = days.clientWidth - 16;
+  if (!spans.length || w <= 0) return;
+  for (const kind of ["long", "short"]) {
+    let last = -1e9, ok = true;
+    for (const sp of spans) {
+      sp.textContent = sp.dataset[kind]; sp.hidden = false;
+      const x = 8 + w * +sp.dataset.f, half = sp.offsetWidth / 2;
+      if (x - half < last + 6) { ok = false; sp.hidden = true; continue; }
+      last = x + half;
+    }
+    if (ok) return;
+  }
+}
+new ResizeObserver(layoutDays).observe($("days"));
 function setTime(i) {
   S.t = snapTime(Math.max(0, Math.min(E().fhrs.length - 1, i)));
   if (bundle) { paint(); updateReadoutAtPoint(); writeHash(); }
@@ -175,7 +207,7 @@ function setPoint(lat, lon) {
   else marker.setLatLng(S.pt);
   const np = nearestPlace(places, lat, lon);
   $("where").textContent = np ? `Near ${np.name}, ${np.st}` : "Chosen point";
-  $("where-sub").textContent = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"}  ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}  ·  click the map to move`;
+  $("where-sub").textContent = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"}  ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}  ·  ${matchMedia("(pointer: coarse)").matches ? "tap" : "click"} the map to move`;
   if (bundle) { updateChart(); writeHash(); }
 }
 let lastSeries;
@@ -231,7 +263,11 @@ function buildControls() {
     $("table-btn").textContent = on ? "Chart" : "Table"; if (on) $("table-wrap").innerHTML = tableHtml(lastSeries);
   };
   $("theme").onclick = () => setTheme(!S.dark);
-  $("rail-toggle").onclick = () => { const o = $("rail").classList.toggle("open"); $("rail-toggle").setAttribute("aria-expanded", String(o)); setTimeout(() => map.invalidateSize(), 50); };
+  const sheet = on => { $("rail").classList.toggle("open", on); $("scrim").hidden = !on; $("rail-toggle").setAttribute("aria-expanded", String(on)); if (on) $("rail").scrollTop = 0; setTimeout(() => map.invalidateSize(), 50); };
+  $("rail-toggle").onclick = () => sheet(!$("rail").classList.contains("open"));
+  $("rail-close").onclick = $("scrim").onclick = () => { sheet(false); $("rail-toggle").focus(); };
+  addEventListener("keydown", e => { if (e.key === "Escape" && $("rail").classList.contains("open")) { sheet(false); $("rail-toggle").focus(); } });
+  narrowQuery.addEventListener("change", () => { if (!narrowQuery.matches) sheet(false); });
   credits();
 }
 function buildMethods() {

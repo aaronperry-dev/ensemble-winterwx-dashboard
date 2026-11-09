@@ -34,8 +34,8 @@ export class FanChart {
   setIndex(i) { this.idx = i; this.draw(); }
 
   geom() {
-    const r = this.cv.getBoundingClientRect();
-    return { w: r.width, h: r.height, l: 38, r: 12, t: 22, b: 24 };
+    const r = this.cv.getBoundingClientRect(), narrow = r.width < 520;
+    return { w: r.width, h: r.height, l: narrow ? 30 : 38, r: narrow ? 10 : 12, t: 22, b: 24, narrow };
   }
   xOf(i, g) { const n = this.data.times.length; return g.l + (n < 2 ? 0 : (i / (n - 1)) * (g.w - g.l - g.r)); }
   indexAt(e) {
@@ -61,9 +61,26 @@ export class FanChart {
     if (!g.w) return;
     cv.width = Math.round(g.w * dpr); cv.height = Math.round(g.h * dpr);
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, g.w, g.h);
-    c.font = '12px "Atkinson Hyperlegible Next", system-ui, sans-serif';
+    const fs = g.narrow ? 11 : 12;
+    c.font = `${fs}px "Atkinson Hyperlegible Next", system-ui, sans-serif`;
     if (!d) return;
     const s = d.series, n = d.times.length;
+    // the key above the plot, wrapped onto as many rows as the width needs; the plot starts below it
+    const accent0 = css("--accent-ink"), ink20 = css("--ink-2"), ink30 = css("--ink-3");
+    const sw = g.narrow ? 14 : 16, gap = g.narrow ? 10 : 14;
+    const lineKey = (col, w, dash) => (x0, y0) => { c.strokeStyle = col; c.lineWidth = w; c.setLineDash(dash || []); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + sw, y0); c.stroke(); c.setLineDash([]); };
+    const boxKey = v => (x0, y0) => { c.fillStyle = css(v); c.fillRect(x0, y0 - 5, sw, 10); };
+    const title = g.narrow ? d.label.replace(/^(\d+)-hour snow ending at each time/, "$1-h snow").replace(/^Snow since the run began/, "Total snow") : d.label;
+    const keys = [[null, title], [lineKey(accent0, 2.25), "Median"], [lineKey(ink20, 1.5, [5, 3]), "Mean"], [lineKey(ink30, 1.25, [2, 3]), "Max"],
+                  [boxKey("--band-b"), "25–75%"], [boxKey("--band-a"), "10–90%"], [boxKey("--band-c"), "5–95%"]];
+    const rowH = g.narrow ? 15 : 0, place = [];
+    let lx0 = g.l, row = 0;
+    for (const [draw, label] of keys) {
+      const wd = (draw ? sw + 5 : 0) + c.measureText(label).width + (draw ? gap : 12);
+      if (rowH && lx0 > g.l && lx0 + wd - gap > g.w - g.r) { row++; lx0 = g.l; }
+      place.push([draw, label, lx0, 9 + row * rowH]); lx0 += wd;
+    }
+    g.t = 22 + row * rowH;
     // scale to the 95th percentile; the maximum member can be several times larger and would flatten everything else, so it is clipped and labelled
     const maxAll = Math.max(...s.max.filter(Number.isFinite), 0), top = niceMax(Math.max(...s.p95.filter(Number.isFinite), 0.5) * 1.15);
     const y = v => g.t + (1 - Math.min(v, top) / top) * (g.h - g.t - g.b);
@@ -72,14 +89,21 @@ export class FanChart {
     const ticks = top <= 4 ? [0, 1, 2, 3, 4].filter(v => v <= top) : [0, top / 4, top / 2, (3 * top) / 4, top].map(v => Math.round(v * 10) / 10);
     c.textAlign = "right"; c.textBaseline = "middle"; c.fillStyle = ink2; c.strokeStyle = hair; c.lineWidth = 1;
     for (const v of ticks) { const yy = Math.round(y(v)) + 0.5; c.beginPath(); c.moveTo(g.l, yy); c.lineTo(g.w - g.r, yy); c.stroke(); c.fillText(fmt(v), g.l - 6, yy); }
-    // x: a tick at each 00 UTC, weekday and date
+    // x: a tick at each 00 UTC, weekday and date (the weekday alone when the full labels would touch), never two labels on top of each other
     c.textAlign = "center"; c.textBaseline = "top";
-    for (let i = 0; i < n; i++) {
-      const dt = new Date(d.times[i]);
-      if (dt.getUTCHours() !== 0) continue;
+    const mids = [];
+    for (let i = 0; i < n; i++) if (new Date(d.times[i]).getUTCHours() === 0) mids.push(i);
+    const full = i => { const dt = new Date(d.times[i]); return `${DAYS[dt.getUTCDay()]} ${dt.getUTCDate()}`; };
+    const gaps = mids.slice(1).map((m, k) => this.xOf(m, g) - this.xOf(mids[k], g));
+    const useShort = gaps.length && Math.min(...gaps) < Math.max(...mids.map(i => c.measureText(full(i)).width)) + 10;
+    let lastR = -1e9;
+    for (const i of mids) {
+      const dt = new Date(d.times[i]), text = useShort ? DAYS[dt.getUTCDay()] : full(i), half = c.measureText(text).width / 2;
       const x = Math.round(this.xOf(i, g)) + 0.5;
       c.strokeStyle = hair; c.beginPath(); c.moveTo(x, g.t); c.lineTo(x, g.h - g.b); c.stroke();
-      c.fillStyle = ink2; c.fillText(`${DAYS[dt.getUTCDay()]} ${dt.getUTCDate()}`, Math.min(Math.max(x, g.l + 14), g.w - 22), g.h - g.b + 6);
+      const lx = Math.min(Math.max(x, g.l + half), g.w - 4 - half);
+      if (lx - half < lastR + 6) continue;
+      lastR = lx + half; c.fillStyle = ink2; c.fillText(text, lx, g.h - g.b + 6);
     }
     const band = (lo, hi, col) => {
       c.beginPath();
@@ -103,16 +127,9 @@ export class FanChart {
     c.fillStyle = accent; c.strokeStyle = css("--surface"); c.lineWidth = 2;
     if (Number.isFinite(s.p50[this.idx])) { c.beginPath(); c.arc(x, y(s.p50[this.idx]), 4.5, 0, 7); c.fill(); c.stroke(); }
     if (this.hover >= 0 && this.hover !== this.idx) { c.strokeStyle = ink3; c.lineWidth = 1; c.beginPath(); c.moveTo(this.xOf(this.hover, g), g.t); c.lineTo(this.xOf(this.hover, g), g.h - g.b); c.stroke(); }
-    // legend, direct in the chart
-    c.textAlign = "left"; c.textBaseline = "middle"; let lx = g.l, ly = 9;
-    const key = (label, draw) => { draw(lx, ly); c.fillStyle = ink2; c.fillText(label, lx + 22, ly); lx += 22 + c.measureText(label).width + 14; };
-    c.fillStyle = ink2; c.fillText(d.label, lx, ly); lx += c.measureText(d.label).width + 18;
-    key("Median", (x0, y0) => { c.strokeStyle = accent; c.lineWidth = 2.25; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + 16, y0); c.stroke(); });
-    key("Mean", (x0, y0) => { c.strokeStyle = ink2; c.lineWidth = 1.5; c.setLineDash([5, 3]); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + 16, y0); c.stroke(); c.setLineDash([]); });
-    key("Max", (x0, y0) => { c.strokeStyle = ink3; c.lineWidth = 1.25; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + 16, y0); c.stroke(); c.setLineDash([]); });
-    key("25–75%", (x0, y0) => { c.fillStyle = css("--band-b"); c.fillRect(x0, y0 - 5, 16, 10); });
-    key("10–90%", (x0, y0) => { c.fillStyle = css("--band-a"); c.fillRect(x0, y0 - 5, 16, 10); });
-    key("5–95%", (x0, y0) => { c.fillStyle = css("--band-c"); c.fillRect(x0, y0 - 5, 16, 10); });
+    // the key
+    c.textAlign = "left"; c.textBaseline = "middle"; c.fillStyle = ink2;
+    for (const [draw, label, kx, ky] of place) { if (draw) { draw(kx, ky); c.fillStyle = ink2; c.fillText(label, kx + sw + 5, ky); } else c.fillText(label, kx, ky); }
     if (document.activeElement === cv) { c.strokeStyle = css("--focus"); c.lineWidth = 2; c.strokeRect(1, 1, g.w - 2, g.h - 2); }
   }
 }
