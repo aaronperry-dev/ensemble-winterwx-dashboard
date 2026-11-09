@@ -33,3 +33,25 @@ def test_geps_water_equivalent_check():
     precip = np.full((10, 10), 10.0, np.float32)
     assert geps.snow_is_water_equivalent(precip * 0.8, precip)
     assert not geps.snow_is_water_equivalent(precip * 8.0, precip)         # a depth in cm-like units would be ~10x the liquid
+
+
+def test_eps_moves_to_the_next_source_when_one_keeps_failing(monkeypatch):
+    from ensemble_snow.sources import eps
+    monkeypatch.setattr(eps.time, "sleep", lambda s: None)
+    monkeypatch.setattr(eps, "iter_file", lambda path: ["msg"])
+    src = eps.EpsSource(fetcher=object(), source="ecmwf,google,aws")
+    tried = []
+
+    def retrieve(source=None, **req):
+        tried.append(source)
+        if len(tried) < 3:
+            raise RuntimeError("503 SlowDown")
+
+    monkeypatch.setattr(src, "_client_retrieve", retrieve)
+    assert src._get(datetime(2026, 11, 9, 0), 6, "sfc", ["tp"]) == ["msg"]
+    assert tried == ["ecmwf", "google", "aws"]
+
+
+def test_eps_source_list_ignores_unknown_names():
+    from ensemble_snow.sources import eps
+    assert eps.EpsSource(fetcher=object(), source="nonsense, google").sources == ["google"]

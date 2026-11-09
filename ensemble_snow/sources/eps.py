@@ -27,14 +27,18 @@ from ..http import Fetcher, NotFound
 from . import common
 
 log = logging.getLogger(__name__)
-ROOTS = {"ecmwf": "https://data.ecmwf.int/forecasts", "aws": "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com"}
+ROOTS = {"ecmwf": "https://data.ecmwf.int/forecasts", "google": "https://storage.googleapis.com/ecmwf-open-data",
+         "aws": "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com"}
+# ECMWF's own server accepts multi-range requests (one request per message group); the cloud mirrors take one request per message and are
+# throttled much sooner ("503 SlowDown").  Sources are tried in this order, each request moving on to the next one when it keeps failing.
+DEFAULT_SOURCES = "ecmwf,google,aws"
 G = 9.80665
 
 # The ECMWF mirror on S3 answers "503 SlowDown" when too many requests arrive at once, and the client's own default is to wait 120 s and retry up to
 # 500 times, all threads in lock-step.  So: few requests in flight, a short jittered start, a bounded retry budget, and a second try for a failed step.
 PARALLEL = int(os.environ.get("ENSNOW_ECMWF_PARALLEL", "3"))
-CLIENT_RETRIES = int(os.environ.get("ENSNOW_ECMWF_RETRIES", "20"))
-CLIENT_RETRY_AFTER = int(os.environ.get("ENSNOW_ECMWF_RETRY_AFTER", "30"))
+CLIENT_RETRIES = int(os.environ.get("ENSNOW_ECMWF_RETRIES", "5"))
+CLIENT_RETRY_AFTER = int(os.environ.get("ENSNOW_ECMWF_RETRY_AFTER", "20"))
 _GATE = threading.BoundedSemaphore(PARALLEL)
 
 
@@ -48,19 +52,34 @@ class EpsSource:
 
     def __init__(self, fetcher: Fetcher | None = None, source: str | None = None, retrieve=None):
         self.http = fetcher or Fetcher()
-        self.source = source or os.environ.get("ENSNOW_ECMWF_SOURCE", "aws")
-        self.root = ROOTS.get(self.source, ROOTS["aws"])
+        names = (source or os.environ.get("ENSNOW_ECMWF_SOURCE") or DEFAULT_SOURCES).split(",")
+        self.sources = [n.strip() for n in names if n.strip() in ROOTS] or ["aws"]
         self._retrieve = retrieve
 
+    @property
+    def root(self) -> str:
+        return ROOTS[self.sources[0]]
+
     def is_complete(self, cycle: datetime, max_fhr: int) -> bool:
-        return self.http.exists(index_url(self.root, cycle, max_fhr))
+        """True when some source has the last step; that source is then tried first."""
+        for name in list(self.sources):
+            if self.http.exists(index_url(ROOTS[name], cycle, max_fhr)):
+                self.sources.remove(name)
+                self.sources.insert(0, name)
+                return True
+        return False
 
     # ------------------------------------------------------------------ what the files contain
     def probe(self, cycle: datetime, step: int) -> set[tuple[str, str]]:
         """{(param, levtype)} found in the file's JSON-lines index, or an empty set if the index cannot be read."""
-        try:
-            text = self.http.get(index_url(self.root, cycle, step)).decode("utf-8", "replace")
-        except (NotFound, RuntimeError):
+        text = None
+        for name in self.sources:
+            try:
+                text = self.http.get(index_url(ROOTS[name], cycle, step)).decode("utf-8", "replace")
+                break
+            except (NotFound, RuntimeError):
+                continue
+        if text is None:
             return set()
         found = set()
         for line in text.splitlines():
@@ -71,13 +90,13 @@ class EpsSource:
                 continue
         return found
 
-    def _client_retrieve(self, **req):
+    def _client_retrieve(self, source=None, **req):
         if self._retrieve is not None:
             return self._retrieve(**req)
         from ecmwf.opendata import Client
         with _GATE:
             time.sleep(random.uniform(0.0, 1.5))
-            return Client(source=self.source, model="ifs", resol="0p25", maximum_retries=CLIENT_RETRIES,
+            return Client(source=source or self.sources[0], model="ifs", resol="0p25", maximum_retries=CLIENT_RETRIES,
                           retry_after=CLIENT_RETRY_AFTER).retrieve(**req)
 
     def _get(self, cycle, step, levtype, params, levels=None):
@@ -85,18 +104,19 @@ class EpsSource:
         req = dict(date=f"{cycle:%Y%m%d}", time=cycle.hour, step=step, stream="enfo", type=["cf", "pf"], levtype=levtype, param=list(params))
         if levels:
             req["levelist"] = list(levels)
-        for attempt in (1, 2, 3):
+        for attempt in range(1, 4 + len(self.sources)):
             fd, path = tempfile.mkstemp(suffix=".grib2")
             os.close(fd)
             try:
-                self._client_retrieve(target=path, **req)
+                src = self.sources[(attempt - 1) % len(self.sources)]
+                self._client_retrieve(source=src, target=path, **req)
                 msgs = list(iter_file(path))
-                log.info("EPS step %3s %s: %d messages", step, levtype, len(msgs))
+                log.info("EPS step %3s %s: %d messages (from %s)", step, levtype, len(msgs), src)
                 return msgs
             except Exception as exc:
-                log.warning("EPS step %s %s %s failed (attempt %d of 3): %s", step, levtype, params, attempt, exc)
-                if attempt < 3 and self._retrieve is None:
-                    time.sleep(random.uniform(20, 40) * attempt)
+                log.warning("EPS step %s %s %s failed (attempt %d): %s", step, levtype, params, attempt, exc)
+                if self._retrieve is None:
+                    time.sleep(random.uniform(10, 25))
             finally:
                 try:
                     os.remove(path)
