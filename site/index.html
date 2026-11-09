@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
 <title>New England snowfall ensembles</title>
 <meta name="description" content="Snowfall percentiles and probabilities for New England from the ECMWF, NCEP and Canadian ensembles, by several snow-to-liquid ratio methods.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2712%27 fill=%27%232a78d6%27/%3E%3C/svg%3E">
@@ -22,6 +24,7 @@
   </header>
 
   <aside class="rail" id="rail" aria-label="Map controls">
+    <div class="sheet-head"><strong>Controls</strong><button id="rail-close" class="ghost" type="button">Done</button></div>
     <section>
       <h2 id="h-ens">Ensemble</h2>
       <div id="ens" class="seg" role="radiogroup" aria-labelledby="h-ens"></div>
@@ -58,6 +61,8 @@
       <p id="credits" class="fine"></p>
     </section>
   </aside>
+
+  <div id="scrim" class="scrim" hidden></div>
 
   <main class="stage">
     <div id="map" tabindex="0" aria-label="Map of New England snowfall. Drag to pan, scroll or use plus and minus to zoom."></div>
