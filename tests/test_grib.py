@@ -63,3 +63,25 @@ def test_global_zero_to_360_grid_is_decoded():
     eccodes.codes_release(gid)
     m = next(grib.iter_messages(msg))
     np.testing.assert_allclose(m.values[:, 0], m.lat, atol=0.01)
+
+
+def test_decoded_messages_do_not_keep_the_global_grid_alive():
+    """Regression: the cropped window was a view of the full 0.25 deg grid, so ~1,150 messages per EPS step pinned ~4.5 GB and the CI runner died."""
+    import tracemalloc
+    ny, nx = 721, 1440
+    gid = eccodes.codes_grib_new_from_samples("regular_ll_sfc_grib2")
+    for k, v in dict(Ni=nx, Nj=ny, latitudeOfFirstGridPointInDegrees=90, latitudeOfLastGridPointInDegrees=-90,
+                     longitudeOfFirstGridPointInDegrees=-180, longitudeOfLastGridPointInDegrees=179.75,
+                     iDirectionIncrementInDegrees=0.25, jDirectionIncrementInDegrees=0.25).items():
+        eccodes.codes_set(gid, k, v)
+    eccodes.codes_set_values(gid, np.random.default_rng(0).random(ny * nx))
+    raw = eccodes.codes_get_message(gid)
+    eccodes.codes_release(gid)
+    next(grib.iter_messages(raw))                                   # warm the axis cache so only per-message memory is measured
+    tracemalloc.start()
+    kept = [next(grib.iter_messages(raw)) for _ in range(60)]
+    current, _ = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert kept[0].values.base is None
+    assert kept[0].values.nbytes < 200_000                         # New England window, not 4 MB
+    assert current < 60 * 300_000, f"{current / 1e6:.0f} MB held for 60 decoded messages"

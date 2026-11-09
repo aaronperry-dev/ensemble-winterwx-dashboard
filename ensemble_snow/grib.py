@@ -80,7 +80,9 @@ def decode_message(gid, ec=None) -> Msg:
     vals = np.where(vals == missing, np.nan, vals)
     if flip_lat:
         vals = vals[::-1]
-    vals = vals[:, lon_order][ys, xs]
+    # np.array(...) makes a real copy of the cropped window.  A plain slice would be a *view* that keeps the whole global grid (4 MB at
+    # 0.25 deg) alive for as long as the message exists: ~1,150 messages per EPS step then pinned ~4.5 GB and killed the runner.
+    vals = np.array(vals[:, lon_order][ys, xs], dtype=np.float32, order="C", copy=True)
     sr = str(_get(ec, gid, "stepRange", _get(ec, gid, "step", 0)))
     member = _get(ec, gid, "perturbationNumber", _get(ec, gid, "number", 0))
     return Msg(str(_get(ec, gid, "shortName", "")), str(_get(ec, gid, "typeOfLevel", "")), int(_get(ec, gid, "level", 0) or 0),
