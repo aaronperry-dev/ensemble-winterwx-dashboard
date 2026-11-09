@@ -11,19 +11,23 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import multiprocessing as mp
+import os
 import shutil
 import sys
+import time
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 
-from . import compute, config, encode, gis, slr, stats
+from . import compute, config, consensus, encode, gis, slr, stats
 from .fields import EnsembleData
 from .sources.base import forecast_steps
 
 log = logging.getLogger("ensemble_snow")
-STAT_NAMES = [f"p{p}" for p in config.PERCENTILES] + ["mean", "max"]
+STAT_NAMES = list(config.ALL_STATS)
 BLEND_LABEL = "Multi-method mean"
 
 
@@ -61,13 +65,71 @@ def pick_cycles(sources: dict, now: datetime, max_fhr: int, common: bool = True,
 
 
 # --------------------------------------------------------------------------- statistics -> bundle
-def _blocks(cum: np.ndarray, liquid: np.ndarray, fhrs: list[int], weights: np.ndarray | None):
-    """cum, liquid: (T, M, ny, nx).  -> amt (W,S,T,ny,nx), prob (W,K,T,ny,nx), slr (T,ny,nx)."""
+# --------------------------------------------------------------------------- parallel work
+# The heavy steps (spatial alignment per accumulation window, then one bundle per snow-to-liquid method) are independent of each other, so they
+# run in forked worker processes that inherit the arrays through ``_CTX`` instead of receiving copies.  ENSNOW_PROCESSES=1 runs everything serially.
+_CTX: dict = {}
+
+
+def _processes() -> int:
+    try:
+        n = int(os.environ.get("ENSNOW_PROCESSES", "0"))
+    except ValueError:
+        n = 0
+    return n if n > 0 else min(4, os.cpu_count() or 1)
+
+
+def _pmap(func, items: list, ctx: dict) -> list:
+    n = min(_processes(), len(items))
+    if n <= 1 or "fork" not in mp.get_all_start_methods():
+        _CTX.clear()
+        _CTX.update(ctx)
+        return [func(i) for i in items]
+    _CTX.clear()
+    _CTX.update(ctx)
+    with ProcessPoolExecutor(n, mp_context=mp.get_context("fork")) as ex:
+        return list(ex.map(func, items))
+
+
+def _shift_job(window: int) -> np.ndarray:
+    c = _CTX
+    xw = stats.windowed(c["cum"], window, c["fhrs"])                           # (T, M, ny, nx)
+    return np.stack([consensus.consensus_shifts(xw[t], c["weights"]) for t in range(len(c["fhrs"]))])
+
+
+def compute_shifts(cum: np.ndarray, fhrs: list[int], weights: np.ndarray | None) -> dict[int, np.ndarray]:
+    """Spatial-alignment displacement fields of the members, per accumulation window and time: ``{window: (T, M, 2, ny, nx)}``.
+
+    Found once, on the multi-method snowfall, and applied to every method's members (the position error of a storm does not depend on the
+    snow-to-liquid ratio), which keeps the cost of SAM independent of the number of methods."""
+    res = _pmap(_shift_job, list(config.WINDOWS_H), dict(cum=cum, fhrs=fhrs, weights=weights))
+    return dict(zip(config.WINDOWS_H, res))
+
+
+def _bundle_job(key: str) -> tuple[str, int]:
+    c = _CTX
+    return key, write_bundle(c["dir"] / c["names"][key], c["cum"][key], c["liquid"], c["fhrs"], c["meta"][key], c["weights"], c["shifts"])
+
+
+def write_bundles(out_dir: Path, names: dict[str, str], cum: dict[str, np.ndarray], liquid, fhrs, meta: dict[str, dict], weights, shifts) -> dict[str, int]:
+    """One bundle per method, in parallel.  ``cum``: method -> (T, M, ny, nx).  Returns the size of each file."""
+    done = _pmap(_bundle_job, list(names), dict(dir=out_dir, names=names, cum=cum, liquid=liquid, fhrs=fhrs, meta=meta, weights=weights, shifts=shifts))
+    return dict(done)
+
+
+def _blocks(cum: np.ndarray, liquid: np.ndarray, fhrs: list[int], weights: np.ndarray | None, shifts: dict[int, np.ndarray]):
+    """cum, liquid: (T, M, ny, nx).  -> amt (W,S,T,ny,nx), prob (W,K,T,ny,nx), slr (T,ny,nx).  S = percentile statistics, then PMM / LPMM / SAM / SAM-LPM."""
     amt, prob = [], []
+    T, _, ny, nx = cum.shape
     for w in config.WINDOWS_H:
-        x = np.moveaxis(stats.windowed(cum, w, fhrs), 1, 0)                 # (M, T, ny, nx)
-        a, p = stats.ensemble_stats(x, weights)
-        amt.append(a)
+        xw = stats.windowed(cum, w, fhrs)                                    # (T, M, ny, nx)
+        a, p = stats.ensemble_stats(np.moveaxis(xw, 1, 0), weights)           # (S, T, ny, nx), (K, T, ny, nx)
+        cons = np.empty((len(config.CONSENSUS_STATS), T, ny, nx), np.float32)
+        for t in range(T):
+            r = consensus.products(xw[t], shifts[w][t], weights)
+            for i, k in enumerate(config.CONSENSUS_STATS):
+                cons[i, t] = r[k]
+        amt.append(np.concatenate([a, cons]))
         prob.append(p)
     eff = np.moveaxis(compute.effective_ratio(cum, liquid), 1, 0)           # (M, T, ny, nx)
     if weights is None:
@@ -83,13 +145,25 @@ def _blocks(cum: np.ndarray, liquid: np.ndarray, fhrs: list[int], weights: np.nd
     return np.stack(amt), np.stack(prob), slr_mean.astype(np.float32)
 
 
-def write_bundle(path: Path, cum, liquid, fhrs, meta: dict, weights=None) -> int:
-    amt, prob, slr_mean = _blocks(cum, liquid, fhrs, weights)
+def write_bundle(path: Path, cum, liquid, fhrs, meta: dict, weights=None, shifts=None) -> int:
+    if shifts is None:
+        shifts = compute_shifts(cum, fhrs, weights)
+    amt, prob, slr_mean = _blocks(cum, liquid, fhrs, weights, shifts)
     return encode.write_bundle(path, [
         dict(name="amt", data=amt, dtype="u16", lo=0.0, step=config.AMT_STEP_IN),
         dict(name="prob", data=prob, dtype="u8", lo=0.0, step=1.0),
         dict(name="slr", data=slr_mean, dtype="u8", lo=0.0, step=config.SLR_STEP),
     ], meta)
+
+
+def bundle_meta(ensemble: str, method: str, init: str, fhrs: list[int]) -> dict:
+    return {"ensemble": ensemble, "method": method, "init": init, "fhrs": fhrs, "stats": STAT_NAMES, "thresholds": list(config.THRESHOLDS_IN),
+            "windows": list(config.WINDOWS_H)}
+
+
+def window_times(fhrs: list[int]) -> dict[str, list[int]]:
+    """Forecast hours at which each accumulation window is complete, for the page's time slider."""
+    return {str(w): [f for f, ok in zip(fhrs, stats.window_valid(w, fhrs)) if ok] for w in config.WINDOWS_H}
 
 
 def method_info() -> dict:
@@ -108,19 +182,22 @@ def process_ensemble(ens: EnsembleData, out: Path, grid_lat, grid_lon, keep: dic
     (out / "data").mkdir(parents=True, exist_ok=True)
     files = {}
     order = ["blend"] + [k for k in slr.METHODS if k in res.methods]
+    t0 = time.time()
+    shifts = compute_shifts(res.methods["blend"], res.fhrs, None)
+    log.info("%s: spatial alignment of the members done in %.0f s", ens.key, time.time() - t0)
+    init = ens.cycle.strftime("%Y-%m-%dT%H:%M:%SZ")
+    names = {k: f"{ens.key}_{k}.bin.gz" for k in order}
+    sizes = write_bundles(out / "data", names, res.methods, res.liquid_in, res.fhrs, {k: bundle_meta(ens.key, k, init, res.fhrs) for k in order}, None, shifts)
     for k in order:
-        meta = {"ensemble": ens.key, "method": k, "init": ens.cycle.strftime("%Y-%m-%dT%H:%M:%SZ"), "fhrs": res.fhrs,
-                "stats": STAT_NAMES, "thresholds": list(config.THRESHOLDS_IN), "windows": list(config.WINDOWS_H)}
-        name = f"{ens.key}_{k}.bin.gz"
-        n = write_bundle(out / "data" / name, res.methods[k], res.liquid_in, res.fhrs, meta)
-        files[k] = {"file": name, "bytes": n}
-        log.info("%s/%s  %.0f kB", ens.key, k, n / 1e3)
+        files[k] = {"file": names[k], "bytes": sizes[k]}
+        log.info("%s/%s  %.0f kB", ens.key, k, sizes[k] / 1e3)
     if keep is not None:
         keep[ens.key] = (ens, res)
     notes = list(res.notes)
     return {"label": spec.label, "short": spec.short, "center": spec.center, "native": f"{spec.native}, {len(ens.members)} members", "license": spec.license, "url": spec.url,
             "init": ens.cycle.strftime("%Y-%m-%dT%H:%M:%SZ"), "members": len(ens.members), "fhrs": res.fhrs, "methods": order,
-            "blend_members": res.blend_members, "ptype": res.ptype_source, "notes": notes, "files": files}
+            "blend_members": res.blend_members, "ptype": res.ptype_source, "notes": notes, "files": files,
+            "window_times": window_times(res.fhrs)}
 
 
 def combine(kept: dict, out: Path) -> dict | None:
@@ -137,18 +214,22 @@ def combine(kept: dict, out: Path) -> dict | None:
     idx = {k: [kept[k][1].fhrs.index(f) for f in fhrs] for k in systems}
     weights = np.concatenate([np.full(len(kept[k][0].members), 1.0 / len(kept[k][0].members)) for k in systems])
     files = {}
+    init = next(iter(inits)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    pooled = {m: np.concatenate([kept[k][1].methods[m][idx[k]] for k in systems], axis=1) for m in methods}
+    t0 = time.time()
+    shifts = compute_shifts(pooled["blend"], fhrs, weights)
+    log.info("all: spatial alignment of the members done in %.0f s", time.time() - t0)
+    liq = np.concatenate([kept[k][1].liquid_in[idx[k]] for k in systems], axis=1)
+    names = {m: f"all_{m}.bin.gz" for m in methods}
+    sizes = write_bundles(out / "data", names, pooled, liq, fhrs, {m: bundle_meta("all", m, init, fhrs) for m in methods}, weights, shifts)
     for m in methods:
-        cum = np.concatenate([kept[k][1].methods[m][idx[k]] for k in systems], axis=1)
-        liq = np.concatenate([kept[k][1].liquid_in[idx[k]] for k in systems], axis=1)
-        meta = {"ensemble": "all", "method": m, "init": next(iter(inits)).strftime("%Y-%m-%dT%H:%M:%SZ"), "fhrs": fhrs, "stats": STAT_NAMES,
-                "thresholds": list(config.THRESHOLDS_IN), "windows": list(config.WINDOWS_H)}
-        n = write_bundle(out / "data" / f"all_{m}.bin.gz", cum, liq, fhrs, meta, weights)
-        files[m] = {"file": f"all_{m}.bin.gz", "bytes": n}
+        files[m] = {"file": names[m], "bytes": sizes[m]}
     total = sum(len(kept[k][0].members) for k in systems)
     return {"label": "All systems combined", "short": "All", "center": "ECMWF + NOAA + ECCC",
             "native": f"{total} members; each system carries equal weight", "license": "see each system", "url": "",
             "init": next(iter(inits)).strftime("%Y-%m-%dT%H:%M:%SZ"), "members": total, "fhrs": fhrs, "methods": methods, "blend_members": [],
-            "ptype": "per system", "notes": ["Systems are pooled with equal total weight (a GEPS member counts for more than an EPS member)."], "files": files}
+            "ptype": "per system", "notes": ["Systems are pooled with equal total weight (a GEPS member counts for more than an EPS member)."], "files": files,
+            "window_times": window_times(fhrs)}
 
 
 # --------------------------------------------------------------------------- site
@@ -206,7 +287,7 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
     if skip_if_deployed and not synthetic and already_deployed(skip_if_deployed, cycles, fingerprint):
         log.info("the live site already shows %s; nothing to do", {k: f"{t:%Y-%m-%d %H}Z" for k, t in cycles.items()})
         return None
-    steps = forecast_steps(max_fhr, config.OUT_STEP_H)
+    steps = forecast_steps(max_fhr, config.OUT_STEP_H, True, config.COARSE_AFTER_H, config.COARSE_STEP_H)
     manifest_ens, kept = {}, {}
     out.mkdir(parents=True, exist_ok=True)
     for k in keys:

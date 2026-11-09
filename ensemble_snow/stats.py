@@ -8,22 +8,24 @@ import numpy as np
 from . import config
 
 
+def window_valid(window_h: int, fhrs: list[int]) -> np.ndarray:
+    """Boolean per output hour: is the ``window_h``-hour total complete there?  It needs the run to be at least that old and the hour
+    ``window_h`` earlier to be an output hour (or the start of the run).  ``window_h == 0`` (run total) is always valid."""
+    have = set(fhrs) | {0}
+    return np.array([window_h <= 0 or (f - window_h >= 0 and (f - window_h) in have) for f in fhrs], bool)
+
+
 def windowed(cum: np.ndarray, window_h: int, fhrs: list[int]) -> np.ndarray:
     """Totals over a rolling window from cumulative totals ``cum`` (T, M, ny, nx) valid at ``fhrs`` (the run starts with 0 snow at hour 0).
-    ``window_h == 0`` means the run total.  Early in the run the window is simply everything since initialisation."""
+    ``window_h == 0`` means the run total.  Times at which the window is not complete (see :func:`window_valid`) are NaN."""
     if window_h <= 0:
         return cum
-    out = np.empty_like(cum)
-    for i, f in enumerate(fhrs):
-        target = f - window_h
-        if target <= 0:
-            out[i] = cum[i]
-        else:
-            j = int(np.argmin([abs(g - target) for g in fhrs]))
-            if abs(fhrs[j] - target) > 1e-9:                        # not an output hour: cannot form the exact window
-                out[i] = np.nan
-            else:
-                out[i] = cum[i] - cum[j]
+    out = np.full_like(cum, np.nan)
+    index = {f: i for i, f in enumerate(fhrs)}
+    for i, ok in enumerate(window_valid(window_h, fhrs)):
+        if ok:
+            start = fhrs[i] - window_h
+            out[i] = cum[i] if start == 0 else cum[i] - cum[index[start]]
     return out
 
 
@@ -59,28 +61,48 @@ def weighted_percentiles(x: np.ndarray, w: np.ndarray, qs) -> np.ndarray:
     return out
 
 
-def ensemble_stats(x: np.ndarray, weights: np.ndarray | None = None, percentiles=config.PERCENTILES, thresholds=config.THRESHOLDS_IN):
-    """``x`` is (M, ...) (members first).  Returns (amounts, probabilities): amounts (len(percentiles)+2, ...) = percentiles, mean, max;
-    probabilities (len(thresholds), ...) in percent.  NaN where no member has a value."""
+def sorted_percentiles(x: np.ndarray, levels) -> np.ndarray:
+    """Hazen percentiles (``levels`` in 0..100) along axis 0 of ``x`` (M, ...), NaN members ignored per cell.  Sorts once for all levels."""
+    x = np.asarray(x, np.float32)
+    xs = np.sort(x, axis=0)                                       # NaN sorts last
+    n = (~np.isnan(x)).sum(axis=0)
+    last = np.maximum(n - 1, 0)
+    out = np.empty((len(levels),) + x.shape[1:], np.float32)
+    for k, q in enumerate(levels):
+        h = np.clip(n * (q / 100.0) + 0.5, 1.0, np.maximum(n, 1))        # 1-based virtual rank
+        lo = np.floor(h).astype(np.intp) - 1
+        frac = (h - np.floor(h)).astype(np.float32)
+        a = np.take_along_axis(xs, lo[None], 0)[0]
+        b = np.take_along_axis(xs, np.minimum(lo + 1, last)[None], 0)[0]
+        out[k] = a + frac * (b - a)
+    return np.where(n[None] > 0, out, np.nan)
+
+
+def ensemble_stats(x: np.ndarray, weights: np.ndarray | None = None, thresholds=config.THRESHOLDS_IN):
+    """``x`` is (M, ...) (members first).  Returns (amounts, probabilities): amounts (len(config.PCT_STATS), ...) in the order of
+    ``config.PCT_STATS`` (min, 5th ... 95th percentiles, mean, max); probabilities (len(thresholds), ...) in percent.
+    NaN where no member has a value."""
     x = np.asarray(x, np.float32)
     valid = ~np.isnan(x)
     n = valid.sum(axis=0)
+    pct_names = [s for s in config.PCT_STATS if s != "mean"]
+    levels = [config.PCT_LEVELS[s] for s in pct_names]
     if weights is None:
+        pct = sorted_percentiles(x, levels)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            pct = np.nanpercentile(x, percentiles, axis=0, method="hazen")      # the same definition the weighted path uses
             mean = np.nanmean(x, axis=0)
-            mx = np.nanmax(x, axis=0)
         prob = np.stack([100.0 * np.where(valid, x >= t - 1e-6, False).sum(axis=0) / np.maximum(n, 1) for t in thresholds])
     else:
         w = np.asarray(weights, np.float64).reshape((-1,) + (1,) * (x.ndim - 1)) * valid
         tot = w.sum(axis=0)
-        pct = weighted_percentiles(x, np.asarray(weights, np.float64), percentiles)
+        pct = weighted_percentiles(x, np.asarray(weights, np.float64), levels)
         with np.errstate(invalid="ignore", divide="ignore"):
             mean = (np.where(valid, x, 0.0) * w).sum(axis=0) / tot
-            mx = np.where(n > 0, np.nanmax(np.where(valid, x, -np.inf), axis=0), np.nan)
             prob = np.stack([100.0 * (w * np.where(valid, x >= t - 1e-6, False)).sum(axis=0) / tot for t in thresholds])
-    amounts = np.concatenate([np.asarray(pct), mean[None], mx[None]], axis=0).astype(np.float32)
+    by = dict(zip(pct_names, pct))
+    by["mean"] = mean
+    amounts = np.stack([np.asarray(by[s], np.float32) for s in config.PCT_STATS])
     amounts = np.where(n[None] > 0, amounts, np.nan)
     prob = np.where(n[None] > 0, prob, np.nan).astype(np.float32)
     return amounts, prob
