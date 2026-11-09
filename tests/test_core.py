@@ -38,9 +38,21 @@ def test_stats_match_numpy_and_probabilities():
     rng = np.random.default_rng(1)
     x = rng.gamma(2.0, 2.0, size=(31, 4, 5)).astype(np.float32)
     amt, prob = stats.ensemble_stats(x)
-    np.testing.assert_allclose(amt[2], np.percentile(x, 50, axis=0, method="hazen"), rtol=1e-5)
+    assert amt.shape[0] == len(config.PCT_STATS) == 10
+    for i, name in enumerate(config.PCT_STATS):                                  # min, 5th, 10th, 25th, median, mean, 75th, 90th, 95th, max
+        want = x.mean(axis=0) if name == "mean" else np.percentile(x, config.PCT_LEVELS[name], axis=0, method="hazen")
+        np.testing.assert_allclose(amt[i], want, rtol=1e-5, atol=1e-6, err_msg=name)
+    np.testing.assert_allclose(amt[0], x.min(axis=0))
     np.testing.assert_allclose(amt[-1], x.max(axis=0))
     np.testing.assert_allclose(prob[1], 100 * (x >= config.THRESHOLDS_IN[1]).mean(axis=0), rtol=1e-5)
+
+
+def test_percentiles_ignore_missing_members():
+    x = np.random.default_rng(7).gamma(2.0, 2.0, size=(25, 3, 3)).astype(np.float32)
+    x[:4, 0, 0] = np.nan
+    amt, _ = stats.ensemble_stats(x)
+    i = config.PCT_STATS.index("p90")
+    np.testing.assert_allclose(amt[i], np.nanpercentile(x, 90, axis=0, method="hazen"), rtol=1e-5)
 
 
 def test_equal_weights_reproduce_unweighted():
@@ -55,7 +67,8 @@ def test_weights_shift_the_median():
     x = np.array([0.0] * 10 + [10.0] * 10, np.float32).reshape(20, 1)
     heavy_low, _ = stats.ensemble_stats(x, np.r_[np.full(10, 3.0), np.full(10, 1.0)])
     heavy_high, _ = stats.ensemble_stats(x, np.r_[np.full(10, 1.0), np.full(10, 3.0)])
-    assert heavy_low[2, 0] < heavy_high[2, 0]
+    i = config.PCT_STATS.index("p50")
+    assert heavy_low[i, 0] < heavy_high[i, 0]
 
 
 def test_all_nan_cells_stay_nan():
@@ -68,8 +81,31 @@ def test_rolling_24h_window():
     fh = [6, 12, 18, 24, 30]
     cum = np.arange(1, 6, dtype=np.float32).reshape(5, 1, 1, 1) * 2
     w = stats.windowed(cum, 24, fh)
-    assert w[3, 0, 0, 0] == cum[3, 0, 0, 0]               # first 24 h: everything since the start
+    assert np.isnan(w[:3]).all()                          # a 24-hour total does not exist before F+24 h
+    assert w[3, 0, 0, 0] == cum[3, 0, 0, 0]               # F+24: everything since the start
     assert w[4, 0, 0, 0] == cum[4, 0, 0, 0] - cum[0, 0, 0, 0]
+
+
+def test_windows_follow_the_available_output_hours():
+    """ECMWF is 3-hourly to F+144 h and 6-hourly after: a 3-hour total cannot be formed late in the run, a 6-hour one can."""
+    from ensemble_snow.sources.base import forecast_steps
+    fh = forecast_steps(168, 3, False, 144, 6)
+    assert fh[:3] == [3, 6, 9] and fh[-4:] == [144, 150, 156, 162, 168][-4:] and 147 not in fh
+    cum = np.cumsum(np.ones((len(fh), 1, 1, 1), np.float32), axis=0)
+    for hours, first, last in ((3, 3, 144), (6, 6, 168), (12, 12, 168), (24, 24, 168), (48, 48, 168), (0, 3, 168)):
+        ok = [f for f, v in zip(fh, stats.window_valid(hours, fh)) if v]
+        assert ok[0] == first and ok[-1] == last, (hours, ok[0], ok[-1])
+        w = stats.windowed(cum, hours, fh)
+        assert (~np.isnan(w[:, 0, 0, 0]) == stats.window_valid(hours, fh)).all()
+    w3 = stats.windowed(cum, 3, fh)
+    assert w3[fh.index(150), 0, 0, 0] != w3[fh.index(150), 0, 0, 0]        # NaN
+
+
+def test_forecast_steps_are_3_hourly_then_6_hourly():
+    from ensemble_snow.sources.base import forecast_steps
+    s = forecast_steps(168, 3, True, 144, 6)
+    assert s[0] == 0 and s[48] == 144 and s[49] == 150 and s[-1] == 168 and len(s) == 53
+    assert forecast_steps(24, 3) == [0, 3, 6, 9, 12, 15, 18, 21, 24]
 
 
 # ---- bundle format
@@ -87,3 +123,17 @@ def test_bundle_round_trip(tmp_path):
     ok = ~np.isnan(amt)
     assert np.abs(out["amt"][ok] - amt[ok]).max() <= 0.025 + 1e-6
     np.testing.assert_array_equal(out["prob"], prob)
+
+
+def test_progress_bars_are_silent(capsys):
+    """CI logs must not fill with one line per progress-bar redraw (a full EPS run was ~57 000 lines)."""
+    import ensemble_snow  # noqa: F401  (importing the package switches the bars off)
+    from multiurl.base import progress_bar
+    from tqdm.auto import tqdm
+    with tqdm(total=10, desc="x") as bar:
+        bar.update(5)
+    bar = progress_bar(total=100, desc="download.grib2")
+    bar.update(50)
+    bar.close()
+    out = capsys.readouterr()
+    assert out.err == "" and out.out == ""
