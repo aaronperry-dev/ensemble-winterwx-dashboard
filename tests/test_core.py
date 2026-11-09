@@ -137,3 +137,81 @@ def test_progress_bars_are_silent(capsys):
     bar.close()
     out = capsys.readouterr()
     assert out.err == "" and out.out == ""
+
+
+# --------------------------------------------------------------------------- terrain adjustment
+def _terrarium_png(h):
+    """A 256 x 256 Terrarium PNG for a height field (m)."""
+    import io
+
+    from PIL import Image
+    v = np.round((h + 32768.0) * 256.0).astype(np.int64)
+    rgb = np.stack([v // 65536, (v // 256) % 256, v % 256], axis=-1).astype(np.uint8)
+    buf = io.BytesIO()
+    Image.fromarray(rgb, "RGB").save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_terrarium_decoding_round_trips_heights():
+    from ensemble_snow import terrain
+    h = np.linspace(-50, 1900, 256 * 256).reshape(256, 256)
+    back = terrain.decode_terrarium(_terrarium_png(h))
+    assert np.abs(back - h).max() < 0.01
+
+
+def test_elevation_is_binned_to_the_fine_grid_with_sea_at_zero(tmp_path):
+    """Every tile is a slope that rises with longitude; sea-floor depth counts as sea level; a missing tile is height 0."""
+    from ensemble_snow import terrain
+    from ensemble_snow.http import NotFound
+
+    class Fake:
+        def __init__(self):
+            self.n = 0
+
+        def get(self, url, byte_range=None):
+            self.n += 1
+            parts = url.split("/")
+            z, x = int(parts[-3]), int(parts[-2])
+            if self.n == 3:
+                raise NotFound(url)
+            n = 256 * 2 ** z
+            lon = ((x * 256 + np.arange(256) + 0.5) / n) * 360.0 - 180.0
+            return _terrarium_png(np.tile(np.where(lon < -70.0, -200.0, (lon + 70.0) * 100.0), (256, 1)))
+
+    fake = Fake()
+    elev = terrain.fetch_elevation(tmp_path, fake)
+    lon, lat = terrain.fine_axes()
+    assert elev.shape == (len(lat), len(lon))
+    west, east = elev[:, lon < -71.0], elev[:, (lon > -69.0) & (lon < -66.0)]
+    assert west.max() == 0.0                              # depth below sea level is clipped to 0
+    want = (lon[(lon > -69.0) & (lon < -66.0)] + 70.0) * 100.0
+    assert np.abs(east.mean(axis=0) - want).max() < 10    # the slope comes back to within a pixel's worth
+    assert (tmp_path / "dem").exists() and terrain.fetch_elevation(tmp_path, object()) is not None     # second call is served from the cache
+
+
+def test_relief_is_zero_on_a_plain_and_positive_on_a_ridge():
+    from ensemble_snow import terrain
+    lon, lat = terrain.fine_axes()
+    flat = np.full((len(lat), len(lon)), 300.0)
+    assert np.abs(terrain.relief(flat, 0.25)).max() < 1e-6
+    ridge = flat.copy()
+    ridge[:, 100] = 900.0                                  # a one-cell (5 km) ridge: the model, 25 km wide, averages it away
+    r = terrain.relief(ridge, 0.25)
+    assert r[80, 100] > 400 and r[80, 130] == pytest.approx(0.0, abs=1e-6)
+    assert terrain.relief(ridge, 0.5)[80, 100] > r[80, 100]    # a coarser model sees even less of it
+
+
+def test_terrain_build_writes_a_small_file_and_survives_failure(tmp_path):
+    import json
+
+    from ensemble_snow import terrain
+    entry = terrain.build(tmp_path / "data", tmp_path, synthetic=True)
+    doc = json.loads((tmp_path / "data" / "terrain.json").read_text())
+    assert entry["file"] == "terrain.json" and set(entry["smooth"]) == {"eps", "gefs", "geps", "all"}
+    g = doc["grid"]
+    assert (g["nx"], g["ny"]) == (201, 161) and set(doc["dz"]) == {"0.25", "0.5"}
+    assert len(doc["elev"]) > 1000 and (tmp_path / "data" / "terrain.json").stat().st_size < 600_000
+    class Broken:
+        def get(self, *a, **k):
+            raise RuntimeError("offline")
+    assert terrain.build(tmp_path / "d2", tmp_path / "c2", synthetic=False, fetcher=Broken()) is None      # no elevation data: no terrain option, no crash
