@@ -57,6 +57,17 @@ python -m ensemble_snow.build --ensembles gefs --max-fhr 96 --workers 16
 
 The deployed site is about 60 MB of static files: the page, vendored Leaflet and font, ~100 kB of GIS JSON (loaded lazily) and, per (system, method), a bundle of about 1.4–1.8 MB (it holds every period, statistic and time; about 60 MB for all four systems) that the browser fetches only when selected.
 
+### Rebuilds that do not download the model again
+
+Changing the page (anything in `site/`) or the statistics / snow-ratio code does **not** re-pull the ~18 GB of ECMWF data.  Two caches are kept between workflow runs (GitHub's `actions/cache`, never committed or published):
+
+| Cache | Holds | Used when |
+|---|---|---|
+| `.cache/bundles` | the finished data files of the last build (~10 MB) | the Python pipeline and the model runs are unchanged, i.e. only `site/` changed: the build finishes in about a minute |
+| `.cache/decoded` | the newest download of each system, already reduced to the New England grid (~100-200 MB) | the fetchers, GRIB reader, grid and level settings are unchanged (`sources/*.py`, `grib.py`, `regrid.py`, `accum.py`, `thermo.py`, `http.py`, `fields.py`, grid settings in `config.py`): products are recomputed from it without any download |
+
+A new model run, a change to the fetch code, or a corrupt / missing cache falls back to downloading.  To force a full refetch run the workflow by hand with **fresh_data** ticked (locally: `--no-cache`).  The caches keep only the newest download of each system, and GitHub evicts old snapshots by itself.
+
 ## Snow-to-liquid ratio (SLR) methods
 
 Snow depth = Σ over the 3 h (6 h late in the run) intervals of (snow-type liquid) × (SLR). The snow-type liquid comes from the model's own snow accumulation or precipitation-type flag where it has one (EPS `sf`, GEPS `ASNOW` when it passes a unit check, GEFS `CSNOW`), otherwise from a wet-bulb ramp (all snow at Tw ≤ 0 °C, none at ≥ 2 °C). Ratios are evaluated at both ends of an interval and averaged. Every ratio is clipped to 3–40:1.
