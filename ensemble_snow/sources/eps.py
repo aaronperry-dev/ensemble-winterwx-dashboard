@@ -11,7 +11,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import tempfile
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
@@ -26,6 +29,13 @@ from . import common
 log = logging.getLogger(__name__)
 ROOTS = {"ecmwf": "https://data.ecmwf.int/forecasts", "aws": "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com"}
 G = 9.80665
+
+# The ECMWF mirror on S3 answers "503 SlowDown" when too many requests arrive at once, and the client's own default is to wait 120 s and retry up to
+# 500 times, all threads in lock-step.  So: few requests in flight, a short jittered start, a bounded retry budget, and a second try for a failed step.
+PARALLEL = int(os.environ.get("ENSNOW_ECMWF_PARALLEL", "3"))
+CLIENT_RETRIES = int(os.environ.get("ENSNOW_ECMWF_RETRIES", "20"))
+CLIENT_RETRY_AFTER = int(os.environ.get("ENSNOW_ECMWF_RETRY_AFTER", "30"))
+_GATE = threading.BoundedSemaphore(PARALLEL)
 
 
 def index_url(root: str, cycle: datetime, step: int) -> str:
@@ -65,26 +75,34 @@ class EpsSource:
         if self._retrieve is not None:
             return self._retrieve(**req)
         from ecmwf.opendata import Client
-        return Client(source=self.source, model="ifs", resol="0p25").retrieve(**req)
+        with _GATE:
+            time.sleep(random.uniform(0.0, 1.5))
+            return Client(source=self.source, model="ifs", resol="0p25", maximum_retries=CLIENT_RETRIES,
+                          retry_after=CLIENT_RETRY_AFTER).retrieve(**req)
 
     def _get(self, cycle, step, levtype, params, levels=None):
         """Download one request to a temporary file and decode it.  Returns a list of messages ([] on failure)."""
         req = dict(date=f"{cycle:%Y%m%d}", time=cycle.hour, step=step, stream="enfo", type=["cf", "pf"], levtype=levtype, param=list(params))
         if levels:
             req["levelist"] = list(levels)
-        fd, path = tempfile.mkstemp(suffix=".grib2")
-        os.close(fd)
-        try:
-            self._client_retrieve(target=path, **req)
-            return list(iter_file(path))
-        except Exception as exc:
-            log.warning("EPS step %s %s %s failed: %s", step, levtype, params, exc)
-            return []
-        finally:
+        for attempt in (1, 2, 3):
+            fd, path = tempfile.mkstemp(suffix=".grib2")
+            os.close(fd)
             try:
-                os.remove(path)
-            except OSError:
-                pass
+                self._client_retrieve(target=path, **req)
+                msgs = list(iter_file(path))
+                log.info("EPS step %3s %s: %d messages", step, levtype, len(msgs))
+                return msgs
+            except Exception as exc:
+                log.warning("EPS step %s %s %s failed (attempt %d of 3): %s", step, levtype, params, attempt, exc)
+                if attempt < 3 and self._retrieve is None:
+                    time.sleep(random.uniform(20, 40) * attempt)
+            finally:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+        return []
 
     def _task(self, cycle, step, have: set[tuple[str, str]]):
         has = (lambda p, lt: not have or (p, lt) in have)
@@ -101,7 +119,7 @@ class EpsSource:
     def load(self, cycle: datetime, steps: list[int], workers: int = 6) -> EnsembleData:
         have = self.probe(cycle, steps[-1])
         by_step: dict[int, tuple[list, list]] = {}
-        with ThreadPoolExecutor(workers) as ex:
+        with ThreadPoolExecutor(min(workers, PARALLEL + 1)) as ex:
             for step, sfc, pl in ex.map(lambda s: self._task(cycle, s, have), steps):
                 by_step[step] = (sfc, pl)
 
