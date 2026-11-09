@@ -74,6 +74,7 @@ jobs:
           FORCE: ${{ inputs.force }}
           ENSEMBLES: ${{ inputs.ensembles || 'eps,gefs,geps' }}
           MAX_FHR: ${{ inputs.max_fhr || '168' }}
+          TQDM_DISABLE: "1"          # no download progress bars: they made the log ~100x larger and hid the real messages
         run: |
           pages_url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
           skip=(--skip-if-deployed "$pages_url")

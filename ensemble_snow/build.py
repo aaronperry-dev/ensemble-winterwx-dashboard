@@ -118,7 +118,7 @@ def process_ensemble(ens: EnsembleData, out: Path, grid_lat, grid_lon, keep: dic
     if keep is not None:
         keep[ens.key] = (ens, res)
     notes = list(res.notes)
-    return {"label": spec.label, "short": spec.short, "center": spec.center, "native": spec.native, "license": spec.license, "url": spec.url,
+    return {"label": spec.label, "short": spec.short, "center": spec.center, "native": f"{spec.native}, {len(ens.members)} members", "license": spec.license, "url": spec.url,
             "init": ens.cycle.strftime("%Y-%m-%dT%H:%M:%SZ"), "members": len(ens.members), "fhrs": res.fhrs, "methods": order,
             "blend_members": res.blend_members, "ptype": res.ptype_source, "notes": notes, "files": files}
 
@@ -260,6 +260,28 @@ def probe(keys: list[str], max_fhr: int, now: datetime | None = None) -> int:
     return 0 if bad < len(keys) * 4 else 1
 
 
+def start_resource_monitor(interval: float = 30.0) -> None:
+    """Log memory and disk use every ``interval`` seconds (Linux only), so a runner that is stopped mid-build leaves evidence in the log."""
+    if not Path("/proc/meminfo").exists():
+        return
+    import threading
+    import time
+
+    def run():
+        while True:
+            try:
+                mem = {ln.split(":")[0]: int(ln.split()[1]) for ln in open("/proc/meminfo")}
+                rss = next(int(ln.split()[1]) for ln in open("/proc/self/status") if ln.startswith("VmRSS"))
+                free = shutil.disk_usage(".").free / 1e9
+                log.info("resources: this process %d MB, memory available %d of %d MB, disk free %.1f GB",
+                         rss // 1024, mem["MemAvailable"] // 1024, mem["MemTotal"] // 1024, free)
+            except Exception:
+                return
+            time.sleep(interval)
+
+    threading.Thread(target=run, daemon=True, name="resource-monitor").start()
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="public")
@@ -282,6 +304,7 @@ def main(argv=None) -> int:
             ap.error(f"unknown ensemble {k!r}")
     if a.probe:
         return probe(keys, a.max_fhr)
+    start_resource_monitor()
     force = datetime.strptime(a.cycle, "%Y%m%d%H") if a.cycle else None
     build_site(Path(a.out), keys, synthetic=a.synthetic, max_fhr=a.max_fhr, cache=Path(a.cache), force_cycle=force, common=not a.independent,
                workers=a.workers, with_gis=not a.no_gis, skip_if_deployed=a.skip_if_deployed)
