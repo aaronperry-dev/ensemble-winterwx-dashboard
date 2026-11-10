@@ -129,6 +129,12 @@ jobs:
       - uses: actions/configure-pages@v5
         if: steps.build.outputs.publish == 'true'
 
+      - name: Size of the site
+        if: steps.build.outputs.publish == 'true'
+        run: |
+          du -sh public
+          echo "$(find public -type f | wc -l) files"
+
       - uses: actions/upload-pages-artifact@v3
         if: steps.build.outputs.publish == 'true'
         with:
@@ -147,12 +153,20 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    timeout-minutes: 45
+      url: ${{ steps.retry.outputs.page_url || steps.deployment.outputs.page_url }}
+    timeout-minutes: 60
     steps:
-      # Pages normally takes under a minute to publish the ~60 MB artifact, but its "syncing_files" stage has stalled for more than the action's
-      # default 10 minutes (the build that took 50 minutes was then lost).  Wait up to 30 minutes before giving up.
+      # Publishing the artifact normally takes under a minute, but GitHub Pages sometimes stalls after "finished_file_sync" and the action gives up
+      # (10 minutes by default; the build that took 50 minutes was then lost).  A second attempt creates a fresh deployment from the same artifact
+      # and usually goes straight through, so the first attempt is not allowed to fail the job and the second one is.
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
         with:
-          timeout: 1800000
+          timeout: 600000
+
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 1500000
