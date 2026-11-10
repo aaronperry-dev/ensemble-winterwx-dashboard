@@ -18,12 +18,13 @@ fetch GRIB2 ──► regrid to 0.25° New England grid ──► snow per membe
 
 ## What the page shows
 
+* **Parameter** – *Snowfall* (the default) or **Liquid precip.**: the total liquid-equivalent precipitation (QPF) each member forecasts, rain, snow and ice together, from the same members, periods and times. It comes straight from the models' accumulated precipitation, so it does not depend on a snow-to-liquid method (the method list, the Ratio view and the terrain adjustment step aside). Amount, Consensus and Chance all work on it; chances use 0.01, 0.1, 0.25, 0.5, 1, 1.5, 2 and 3 in. It has its own green-to-purple colour scale. The URL carries `q=qpf`.
 * **Amount** – the minimum, 5th, 10th, 25th, 50th (the median), mean, 75th, 90th, 95th percentile or maximum member, for an accumulation period of **3, 6, 12, 24 or 48 hours, or the run total**. Time is a **slider in 3-hour steps** to F+144 h, then 6-hourly to F+168 h (ECMWF publishes 6-hourly fields after F+144 h, so 3-hour totals end there). A period only appears at times when it is complete: a 24-hour total starts at F+24 h.
 * **Consensus** – four ways of drawing one map that keeps realistic amounts (see below): **PMM**, **LPMM**, **SAM** and **SAM–LPM**.
 * **Chance** – the share of members reaching 0.1, 1, 2, 3, 4, 6, 8, 12, 18 or 24 in in the chosen period (the edges of the NWS snowfall legend).
 * **Ratio** – the effective snow-to-liquid ratio of the chosen method (mean member).
 * Colours: snowfall uses the NWS "Total Snow Forecast" legend of the Portland/Gray office (sampled from its map) in both appearances; chances use ColorBrewer **BuPu**, a cool sequential ramp that cannot be mistaken for the amounts.
-* Ensemble: EPS, GEFS, GEPS, or **All** (the three pooled; each system carries equal total weight, so the 21 GEPS members count for more apiece than the 50-51 EPS members).
+* Ensemble: EPS, GEFS, GEPS, or **All** (the three pooled; each system carries equal total weight by default, so the 21 GEPS members count for more apiece than the 50-51 EPS members; see *Weighting the systems* below to change that).
 * Snow-to-liquid method (see below), per system.
 * A bottom dock with the time slider and a **fan chart** (5–95 %, 10–90 % and 25–75 % bands, 50th percentile, mean, maximum) for the point you click. The chart is a second time control (click or drag it); ←/→ step the slider. A table view of all 14 statistics at the point is one button away.
 * **Town search** – the box in the header completes town and city names as you type (add a state to narrow it: "wilton nh"). Picking one moves the chosen point and the map there; the chart and the readout then show the ensemble values at that point. The name is kept in the URL.
@@ -123,6 +124,24 @@ All four are computed in `ensemble_snow/consensus.py` for every method, period a
 | **SAM–LPM** | The aligned members combined by LPM instead of averaged. | Lee et al. 2024 |
 
 Choices the papers leave open are mine: the patch sizes are the paper's 600 km and 225 km converted to this coarse grid (and its member-to-mean alignment); amounts are square-root transformed above 0.01 in before matching; and **the displacement fields are found once per period and time on the multi-method snowfall and applied to every method's members** (a storm's position error does not depend on the snow-to-liquid ratio), which keeps the cost independent of the number of methods. The pooled "All" view uses the member weights throughout. These maps are consensus pictures: they do not conserve totals and are not the likeliest outcome at each point, so the page says to use percentiles and chances for point decisions.
+
+## Weighting the systems
+
+Does weighting the families or members improve the blend? The short answer from the literature and from how operational blends are built:
+
+* **Members within a system: no.** They are exchangeable draws (perturbed initial conditions and model error), so every member of a system counts the same. There is no member-level weighting here.
+* **Between systems: equal weights are a sound default, and skill weights only help when the skill is known well.** Multi-model pooling helps mostly by fixing the over-confidence and under-dispersion of each single system (Hagedorn et al. 2012; Hamill 2012). Weighting by past skill adds to that only if the skill difference is large, stable and estimated from a long, consistent record; with a short or noisy record equal weights do better (Weigel et al. 2008, 2010). The ECMWF ensemble is generally the best of the three in the medium range, so some tilt toward it is defensible, but the evidence for a particular tilt for New England winter storms is thin.
+* **What an operational blend does.** The National Blend of Models (v5.0, winter weather, beyond about 72 h) uses fixed expert weights, not a fitted skill: ECMWF ensemble 50 %, GEFS 30 %, GEPS 5 %, plus the deterministic GFS (8 %) and GDPS (7 %). Per member that is about 1 % for each of the 50 ECMWF and 30 GEFS members and 1 % for each of five GEPS members. Counting every member the same here (51, 31 and 21 members) gives 49.5 %, 30.1 % and 20.4 %, close to NBM's ECMWF and GEFS shares.
+
+So the default stays **equal weight per system**, and the build takes an optional setting:
+
+| `--blend-weights` / workflow input `blend_weights` | Shares (EPS / GEFS / GEPS) |
+|---|---|
+| `equal` (default) | 33.3 / 33.3 / 33.3 % |
+| `members` | in proportion to member counts, so every member counts the same (about 50 / 30 / 20 %) |
+| `eps=50,gefs=30,geps=20` | any positive numbers for every system built; they are normalised, and renormalised if a system drops out of the pool |
+
+The shares in use are shown under "All" in the page's notes and in `manifest.json` (`systems[].weight`). They apply to every product of the pooled view, snowfall and liquid precipitation alike, and a build with other weights is treated as a different build (it is not skipped as "already deployed"; use *force* in the workflow). Weights that are *fitted* to skill need verification data (for example MRMS/Stage IV precipitation or NOHRSC snow analyses over several winters), which this project does not collect; until it does, the explicit setting above is for experiments, not a claim that any tilt is better.
 
 ## Status of the data fetchers (read this)
 
