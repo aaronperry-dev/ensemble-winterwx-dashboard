@@ -182,3 +182,38 @@ def test_cycle_choice_with_a_missing_or_late_system():
     got = build.pick_cycles({"eps": Fake(RuntimeError("down")), "gefs": Fake({c12})}, now, 168)
     assert got == {"gefs": c12}
     assert build.pick_cycles({"eps": Fake(set())}, now, 168) == {}
+
+
+def test_a_system_that_stops_early_is_left_out_of_the_pool_but_keeps_its_own_view(tmp_path, degrade):
+    """A GEPS download that ends at F+9 of 24 would otherwise cut the pooled forecast to 9 h for everyone."""
+    degrade({"geps": {"blank": set(range(12, 25, 3))}})
+    man = run(tmp_path, ["eps", "gefs", "geps"], max_fhr=24)
+    assert man["ensembles"]["geps"]["fhrs"] == [3, 6, 9]
+    a = man["ensembles"]["all"]
+    assert [s["key"] for s in a["systems"]] == ["eps", "gefs"] and a["fhrs"][-1] == 24
+    assert any("not in the combined view" in n and "F+9" in n for n in a["notes"])
+
+
+def test_a_system_a_little_shorter_still_shortens_the_pool(tmp_path, degrade):
+    degrade({"geps": {"blank": {21, 24}}})
+    man = run(tmp_path, ["eps", "gefs", "geps"], max_fhr=24)
+    a = man["ensembles"]["all"]
+    assert [s["key"] for s in a["systems"]] == ["eps", "gefs", "geps"] and a["fhrs"][-1] == 18
+
+
+def test_an_incomplete_download_is_flagged_and_never_judged_as_already_deployed():
+    live = {"fingerprint": "f", "synthetic": False, "ensembles": {"geps": {"init": "2026-11-09T12:00:00Z", "partial": True}}}
+
+    class R:
+        status_code = 200
+        def json(self):
+            return live
+
+    class F:
+        def get(self, *a, **k):
+            return R()
+
+    cycles = {"geps": datetime(2026, 11, 9, 12)}
+    assert build.already_deployed("https://x", cycles, "f", F()) is False
+    live["ensembles"]["geps"].pop("partial")
+    assert build.already_deployed("https://x", cycles, "f", F()) is True
