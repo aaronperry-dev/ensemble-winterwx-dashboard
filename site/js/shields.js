@@ -1,16 +1,18 @@
-// Route shields drawn as small inline SVGs: the Interstate and U.S. route shields, and a shape for each New England state's own routes.
-// The state shapes are simplified (plain outline, number only); change them in STATE_SHAPES.  A route not listed gets the round default.
+// Route shields drawn as small inline SVGs.
+//   Interstate and U.S. route shields: the outlines of MUTCD sign M1-1 and M1-4 (FHWA Standard Highway Signs, 24 x 24 inches; 30 x 24 for three digits) with the
+//   FHWA Series D numerals, which narrow to Series C and B when a number does not fit (the rule of the Standard Highway Signs).  The artwork is in mutcd-art.js.
+//   State routes: a shape for each New England state's own route marker, simplified (plain outline, number only); change them in STATE_SHAPES.
+//   A route not listed gets the round default.
+
+import { ART } from "./mutcd-art.js";
 
 const NS = "http://www.w3.org/2000/svg";
-const H = 26;                                    // shields are drawn in a box 26 units tall (the width grows with the number of digits) ...
-const SCALE = 0.86;                              // ... and shown at this fraction of that, in pixels
+const H = 24;                                    // every shield is drawn in a box 24 units tall (the width is 24, or 30 for three characters) ...
+const SCALE = 0.95;                              // ... and shown at this many pixels per unit
+const US_SQUARE = true;                          // the U.S. route sign is a white shield on a black square (M1-4); false draws the shield alone with a black outline
 
-const INTERSTATE = { blue: "#00478f", red: "#c8102e" };
-
-// Outlines are drawn in a box of w x H.  Each returns an SVG path (or an element description for round shapes).
+// Outlines of the state shields, in a box of w x H.  Each returns an SVG path.
 const SHAPES = {
-  interstate: w => `M1.5 7.5 Q${w * 0.26} 0.5 ${w / 2} 4 Q${w * 0.74} 0.5 ${w - 1.5} 7.5 L${w - 1.5} 16 Q${w - 1.5} 22.5 ${w / 2} ${H - 0.8} Q1.5 22.5 1.5 16 Z`,
-  us: w => `M1.2 7 Q${w * 0.25} 1 ${w / 2} 4.2 Q${w * 0.75} 1 ${w - 1.2} 7 L${w - 1.2} 14.5 Q${w - 1.2} 21.5 ${w / 2} ${H - 0.8} Q1.2 21.5 1.2 14.5 Z`,
   circle: w => `M${w / 2} 1.2 A${H / 2 - 1.2} ${H / 2 - 1.2} 0 1 1 ${w / 2} ${H - 1.2} A${H / 2 - 1.2} ${H / 2 - 1.2} 0 1 1 ${w / 2} 1.2 Z`,
   // Maine: an upright oval
   oval: w => `M${w / 2} 1.2 A${w / 2 - 1.2} ${H / 2 - 1.2} 0 1 1 ${w / 2} ${H - 1.2} A${w / 2 - 1.2} ${H / 2 - 1.2} 0 1 1 ${w / 2} 1.2 Z`,
@@ -26,37 +28,55 @@ const SHAPES = {
 export const STATE_SHAPES = { ME: "oval", NH: "circle", VT: "bulge", MA: "rounded", CT: "arch", RI: "cut", NY: "circle" };
 
 const cache = new Map();
+const COLORS = { white: "#fff", black: "#000", red: "#af1e2d", blue: "#003f87" };          // MUTCD: white, black, PMS 187 red, PMS 294 blue
 
 export function shieldSize(num) {
-  const w = num.length >= 3 ? 31 : num.length === 2 ? 26 : 24;
+  const w = num.length >= 3 ? 30 : 24;
   return { w, h: H, pw: Math.round(w * SCALE), ph: Math.round(H * SCALE) };
+}
+
+// ---- FHWA lettering: the first series in which the text fits within maxWidth at the given cap height, else the narrowest, shrunk to fit ----
+const CHAIN = [ART.font.D, ART.font.C, ART.font.B];
+const advance = (text, font) => [...text].reduce((s, c) => s + (font[c] ? font[c][0] : 0), 0);
+const r3 = v => Math.round(v * 1000) / 1000;
+function lettering(text, { height, x, y, maxWidth }) {
+  let font = CHAIN.find(f => advance(text, f) * height <= maxWidth), h = height;
+  if (!font) { font = CHAIN[CHAIN.length - 1]; h = Math.max(height * 0.5, maxWidth / Math.max(advance(text, font), 1e-6)); }
+  let pen = x - (advance(text, font) * h) / 2, out = "";
+  for (const c of text) {
+    const g = font[c];
+    if (!g) continue;
+    out += `<path d="${g[1]}" transform="translate(${r3(pen)} ${y}) scale(${r3(h)})"/>`;
+    pen += g[0] * h;
+  }
+  return out;
 }
 
 /** SVG markup of one shield.  cls: 0 Interstate, 1 U.S. route, 2 state route; st: state abbreviation (state routes only). */
 export function shieldSvg(cls, st, num) {
   const key = `${cls}|${cls === 2 ? st : ""}|${num}`;
   if (cache.has(key)) return cache.get(key);
-  const { w } = shieldSize(num), fs = num.length >= 3 ? 11 : num.length === 2 ? 14 : 15;
-  let body, tl = 21, ink = "#111", ty = cls === 0 ? 17.6 : cls === 1 ? 16.5 : 17.2;
+  const { w } = shieldSize(num), wide = w > 24, sx = w / 24;
+  let body;
   if (cls === 0) {
-    const d = SHAPES.interstate(w), id = `ci${w}`;
-    body = `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs>
-      <path d="${d}" fill="none" stroke="rgba(0,0,0,.4)" stroke-width="3.6" stroke-linejoin="round"/>
-      <path d="${d}" fill="${INTERSTATE.blue}"/>
-      <rect x="0" y="0" width="${w}" height="9.2" fill="${INTERSTATE.red}" clip-path="url(#${id})"/>
-      <path d="${d}" fill="none" stroke="#fff" stroke-width="1.7"/>`;
-    ink = "#fff";
+    const art = ART.interstate;
+    const outer = art[0][0];
+    const paths = art.map(([d, f]) => `<path d="${d}" fill="${COLORS[f] || f}"/>`).join("");
+    body = `<g transform="scale(${sx} 1)"><path d="${outer}" fill="none" stroke="rgba(0,0,0,.45)" stroke-width="2.6" stroke-linejoin="round"/>${paths}</g>` +
+      `<g fill="#fff">${lettering(num, { height: 11, x: w / 2, y: 17.5, maxWidth: wide ? 23.5 : 17.6 })}</g>`;
+  } else if (cls === 1) {
+    const [sq, shield] = ART.us;
+    body = `<g transform="scale(${sx} 1)">` + (US_SQUARE
+      ? `<path d="${sq[0]}" fill="${COLORS[sq[1]]}"/><path d="${shield[0]}" fill="${COLORS[shield[1]]}"/>`
+      : `<path d="${shield[0]}" fill="${COLORS[shield[1]]}" stroke="#000" stroke-width="1.8" stroke-linejoin="round"/>`) + `</g>` +
+      `<g fill="#000">${lettering(num, { height: 12, x: w / 2, y: 17.5, maxWidth: wide ? 25.5 : 20.3 })}</g>`;
   } else {
-    const shape = cls === 1 ? "us" : (STATE_SHAPES[st] || "circle");
-    const d = SHAPES[shape](w);
+    const shape = STATE_SHAPES[st] || "circle", d = SHAPES[shape](w);
     body = `<path d="${d}" fill="none" stroke="rgba(0,0,0,.4)" stroke-width="4.4" stroke-linejoin="round"/>` +
-      `<path d="${d}" fill="#fff" stroke="#111" stroke-width="1.8" stroke-linejoin="round"/>`;
-    ty = 17.4;
-    if (shape === "circle") tl = 16;
+      `<path d="${d}" fill="#fff" stroke="#111" stroke-width="1.8" stroke-linejoin="round"/>` +
+      `<g fill="#111">${lettering(num, { height: 11.5, x: w / 2, y: 17.75, maxWidth: shape === "circle" ? (wide ? 21 : 14.5) : wide ? 22 : 16.5 })}</g>`;
   }
-  const svg = `<svg xmlns="${NS}" width="${Math.round((w + 2) * SCALE)}" height="${Math.round(H * SCALE)}" viewBox="-1 0 ${w + 2} ${H}" aria-hidden="true">${body}` +
-    `<text x="${w / 2}" y="${ty}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${fs}" fill="${ink}"` +
-    `${num.length >= 3 ? ` textLength="${tl}" lengthAdjust="spacingAndGlyphs"` : ""}>${num}</text></svg>`;
+  const svg = `<svg xmlns="${NS}" width="${Math.round((w + 2) * SCALE)}" height="${Math.round(H * SCALE)}" viewBox="-1 0 ${w + 2} ${H}" data-route="${num}" aria-hidden="true">${body}</svg>`;
   cache.set(key, svg);
   return svg;
 }

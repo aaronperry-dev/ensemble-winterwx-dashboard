@@ -28,7 +28,7 @@ fetch GRIB2 ──► regrid to 0.25° New England grid ──► snow per membe
 * Snow-to-liquid method (see below), per system.
 * A bottom dock with the time slider and a **fan chart** (5–95 %, 10–90 % and 25–75 % bands, 50th percentile, mean, maximum) for the point you click. The chart is a second time control (click or drag it); ←/→ step the slider. A table view of all 14 statistics at the point is one button away.
 * **Town search** – the box in the header completes town and city names as you type (add a state to narrow it: "wilton nh"). Picking one moves the chosen point and the map there; the chart and the readout then show the ensemble values at that point. The name is kept in the URL.
-* Layers: counties, state lines, highways with route shields (Interstate and U.S. route shields, and a shape for each New England state's routes; state routes of New England and New York come from Natural Earth's 1:10m roads, so only the main ones appear), towns, peaks, ski areas, and a water mask that hides the model field over the ocean and lakes. Every line is drawn with a light (dark mode: dark) casing under a thin core so it stays visible over any colour of the snowfall field; the layers are stacked: field, water mask, coast, counties, states, roads, labels. State-route shield shapes are in `site/js/shields.js` (`STATE_SHAPES`) and are simplified. Light and dark appearance. All state is in the URL hash, so a view can be shared.
+* Layers: counties, state lines, highways with route shields (the Interstate and U.S. route shields are the outlines of the MUTCD signs M1-1 and M1-4 with FHWA Series D numerals, narrowing to Series C and B for long numbers; each New England state's routes have a shape of their own; state routes of New England and New York come from Natural Earth's 1:10m roads, so only the main ones appear), towns, peaks, ski areas, and a water mask that hides the model field over the ocean and lakes. Every line is drawn with a light (dark mode: dark) casing under a thin core so it stays visible over any colour of the snowfall field; the layers are stacked: field, water mask, coast, counties, states, roads, labels. State-route shield shapes are in `site/js/shields.js` (`STATE_SHAPES`) and are simplified. Light and dark appearance. All state is in the URL hash, so a view can be shared.
 
 ## Run it locally
 
@@ -170,6 +170,8 @@ tests/               pytest (+ node decoder check)
 ```
 
 ## Credits and licences
+
+Route shield artwork and lettering: the FHWA *Standard Highway Signs* and *Standard Alphabets* (works of the U.S. government), taken through the npm package [mutcd-ts](https://github.com/brycedorn/mutcd-ts) (MIT, Copyright (c) 2026 Bryce Dorn). `scripts/gen_mutcd_art.py` regenerates `site/js/mutcd-art.js` from it. In `site/js/shields.js`, `US_SQUARE = false` draws the U.S. route shield without its black square.
 
 Forecast data: ECMWF open data (CC BY 4.0), NOAA/NCEP (US government work), ECCC/MSC (Open Government Licence – Canada). Basemap: Natural Earth (public domain). Places and peaks: GeoNames (CC BY 4.0, places of 500 people or more), about 900 further town and village names from public ZIP-code place lists (`ensemble_snow/data/places.csv`, population 0 = not on file), and the lists inherited from the reference RRFS winter viewer. Leaflet (BSD-2-Clause) and Atkinson Hyperlegible Next (SIL OFL 1.1) are vendored with their licences. SLR formulas are generalised from that reference project; see the references in `ensemble_snow/slr.py`.
 
