@@ -68,9 +68,9 @@
 
     <section id="terrain-sec" hidden>
       <h2>Terrain adjustment</h2>
-      <label class="check"><input id="terrain" type="checkbox"><span>Scale snowfall by elevation</span></label>
+      <label class="check"><input id="terrain" type="checkbox"><span id="terrain-label">Scale snowfall by elevation</span></label>
       <label class="slider"><span>Strength: <b id="tk-val">6</b>% per 100 m</span><input id="tk" type="range" min="0" max="15" step="1" value="6"></label>
-      <p class="fine">Experimental rule of thumb. Where the ground is higher than the smooth terrain the model sees, amounts go up by this much per 100 m, and in valleys they go down. It rescales the model's snow: it cannot move a storm, turn rain into snow or add snow where the model has none. Amounts and chances change; the snow ratio does not.</p>
+      <p id="terrain-note" class="fine">Experimental rule of thumb. Where the ground is higher than the smooth terrain the model sees, amounts go up by this much per 100 m, and in valleys they go down. It rescales the model's snow: it cannot move a storm, turn rain into snow or add snow where the model has none. Amounts and chances change; the snow ratio does not.</p>
     </section>
 
     <section class="credits">

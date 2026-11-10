@@ -32,6 +32,9 @@ const LAYERS = [["counties", "Counties", true], ["states", "State lines", true],
 const DEFAULT_PT = [42.3584, -71.0598];
 const DAYS = d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
 const winText = w => (w ? `${w}-hour` : "storm-total");
+const TERRAIN_NOTE = {
+  snow: "Experimental rule of thumb. Where the ground is higher than the smooth terrain the model sees, amounts go up by this much per 100 m, and in valleys they go down. It rescales the model's snow: it cannot move a storm, turn rain into snow or add snow where the model has none. Amounts and chances change; the snow ratio does not.",
+  qpf: "Experimental rule of thumb. Where the ground is higher than the smooth terrain the model sees, liquid amounts go up by this much per 100 m, and in valleys they go down. It uses elevation only: it cannot move a storm or add precipitation where the model has none, and it knows nothing of wind direction, so it cannot tell a windward slope (wetter) from a lee side (drier)." };
 const PARAMS = [["snow", "Snowfall"], ["qpf", "Liquid precip."]];
 const PARAM_NOTE = { snow: "Snow depth from each member's precipitation, by the method chosen below.", qpf: "Total liquid precipitation (QPF): all the water the members forecast, rain, snow and ice, as liquid-equivalent inches. It does not depend on a snow-to-liquid ratio." };
 
@@ -124,7 +127,7 @@ function paint() {
   if (terrainActive()) {
     const dz = terrainDz();
     out = spec.kind === "prob"
-      ? adjustChance(M.thresholds.map((_, k) => extract(bundle, { ...spec, k }, GRID)), M.thresholds, spec.k, GRID, TERR, dz, S.tk)
+      ? adjustChance(thresholds().map((_, k) => extract(bundle, { ...spec, k }, GRID)), thresholds(), spec.k, GRID, TERR, dz, S.tk)
       : adjustAmount(out.values, GRID, TERR, dz, S.tk);
   }
   S.values = out.values; S.vgrid = out.grid;
@@ -132,8 +135,8 @@ function paint() {
   legend(); timeLabels();
 }
 
-// Terrain adjustment applies to snowfall amounts and chances, not to the snow-to-liquid ratio.
-const terrainActive = () => !!(S.terrain && TERR && S.prod !== "slr" && !qpf());
+// Terrain adjustment applies to snowfall and liquid precipitation amounts and chances, not to the snow-to-liquid ratio.
+const terrainActive = () => !!(S.terrain && TERR && S.prod !== "slr");
 const terrainDz = () => TERR.dz[M.terrain.smooth[S.ens]] || Object.values(TERR.dz)[0];
 const pointFactor = (lat, lon) => (terrainActive() ? factor(sample(terrainDz(), TERR.grid, lat, lon) || 0, S.tk) : 1);
 
@@ -261,7 +264,7 @@ function updateChart() {
   const pf = pointFactor(S.pt[0], S.pt[1]);
   for (const k of Object.keys(ser)) sub[k] = Float32Array.from(v, i => ser[k][i] * pf);
   const ta = terrainActive() ? ", terrain-adj." : "";
-  const d = { times: v.map(validMs), fhr: v.map(i => E().fhrs[i]), idx: v, series: sub, label: qpf() ? (w ? `${w}-hour liquid precipitation ending at each time (in)` : "Liquid precipitation since the run began (in)") : w ? `${w}-hour snow ending at each time (in${ta})` : `Snow since the run began (in${ta})` };
+  const d = { times: v.map(validMs), fhr: v.map(i => E().fhrs[i]), idx: v, series: sub, label: qpf() ? (w ? `${w}-hour liquid precipitation ending at each time (in${ta})` : `Liquid precipitation since the run began (in${ta})`) : w ? `${w}-hour snow ending at each time (in${ta})` : `Snow since the run began (in${ta})` };
   lastSeries = d; chart.setData(d); chart.setIndex(Math.max(0, v.indexOf(S.t)));
   if (!$("table-wrap").hidden) $("table-wrap").innerHTML = tableHtml(d);
 }
@@ -360,13 +363,15 @@ function buildProd() {
   noteFor();
   $("win-wrap").hidden = S.prod === "slr";
 }
-// Snowfall or total liquid precipitation.  The liquid fields have no snow-to-liquid method, ratio or terrain scaling, so those controls step aside.
+// Snowfall or total liquid precipitation.  The liquid fields have no snow-to-liquid method or ratio, so those controls step aside; terrain scaling applies to both.
 function buildParam() {
   const has = Object.values(M.ensembles).some(e => e.files.qpf);
   $("param").closest("section").hidden = !has;                                   // a build from before liquid precipitation was added has none
   radio($("param"), PARAMS.map(([k, t]) => [k, t, null, k === "qpf" && !E().files.qpf]), S.param, v => setParam(v));
   $("param-note").textContent = PARAM_NOTE[S.param];
-  $("method-sec").hidden = qpf(); $("terrain-sec").hidden = !TERR || qpf();
+  $("method-sec").hidden = qpf(); $("terrain-sec").hidden = !TERR;
+  $("terrain-label").textContent = qpf() ? "Scale liquid precipitation by elevation" : "Scale snowfall by elevation";
+  $("terrain-note").textContent = TERRAIN_NOTE[S.param];
 }
 function setParam(v) {
   if (v === S.param) return;
