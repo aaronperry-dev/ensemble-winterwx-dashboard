@@ -19,6 +19,10 @@
   <header class="top">
     <h1>New England snowfall ensembles</h1>
     <p id="runline" class="runline" aria-live="polite"></p>
+    <div class="search">
+      <input id="search" type="search" role="combobox" aria-label="Search for a town or city" aria-autocomplete="list" aria-expanded="false" aria-controls="search-list" placeholder="Search a town or city" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      <ul id="search-list" role="listbox" aria-label="Matching towns" hidden></ul>
+    </div>
     <button id="theme" class="ghost" type="button" aria-label="Switch between light and dark appearance">Dark</button>
     <button id="rail-toggle" class="ghost only-narrow" type="button" aria-expanded="false" aria-controls="rail">Controls</button>
   </header>

@@ -65,6 +65,16 @@ button, select, input { font: inherit; color: inherit; }
 .top { grid-area: top; display: flex; align-items: baseline; gap: 20px; padding: 10px 18px; border-bottom: 1px solid var(--hair); background: var(--surface); }
 .top h1 { font-size: 19px; font-weight: 700; margin: 0; letter-spacing: -0.005em; }
 .runline { margin: 0; color: var(--ink-2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top { position: relative; z-index: 1700; }
+.search { position: relative; flex: 0 1 280px; min-width: 0; align-self: center; }
+.search input { width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1px solid var(--hair); border-radius: 6px; background: var(--page); color: var(--ink); }
+.search input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.search input::placeholder { color: var(--ink-3); }
+#search-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--hair); border-radius: 8px; box-shadow: var(--shadow); max-height: min(60dvh, 340px); overflow-y: auto; z-index: 5; }
+#search-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 9px; border-radius: 6px; cursor: pointer; }
+#search-list li[aria-selected="true"] { background: var(--accent-wash); }
+#search-list li small { color: var(--ink-3); font-size: 12px; }
+#search-list li.none { color: var(--ink-2); cursor: default; }
 .ghost { background: none; border: 1px solid var(--hair); border-radius: 6px; padding: 4px 11px; cursor: pointer; color: var(--ink-2); }
 .ghost:hover { background: var(--accent-wash); color: var(--ink); }
 .only-narrow { display: none; }
@@ -152,6 +162,7 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
 #chart { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
 .tip { position: absolute; z-index: 5; pointer-events: none; background: var(--surface); border: 1px solid var(--hair); box-shadow: var(--shadow); border-radius: 8px; padding: 7px 10px; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 150px; }
 .tip .th { font-weight: 600; margin-bottom: 3px; }
+.tip .grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(var(--rows, 8), auto); column-gap: 18px; }
 .tip .row { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
 .tip .row b { color: var(--ink); font-weight: 600; }
 .table-wrap { position: absolute; inset: 0 8px 6px 8px; overflow: auto; background: var(--surface); }
@@ -177,6 +188,8 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
   .top h1 { font-size: 15px; flex: 1 1 0; min-width: 0; line-height: 1.25; }
   .sheet-head .ghost { margin-left: auto; margin-right: 8px; }
   .sheet-head .ghost + .ghost { margin-left: 0; margin-right: 0; }
+  .search { flex: 1 1 100%; order: 2; }
+  .search input { padding: 9px 11px; font-size: 16px; }          /* 16 px keeps phones from zooming the page when the field is focused */
   .runline { white-space: normal; font-size: 12.5px; flex: 1 1 100%; order: 3; margin: 0; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .only-narrow { display: inline-block; }
 
@@ -198,6 +211,8 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
   .where { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
   .where span { font-size: 12.5px; }
   .dock-body { height: 142px; padding: 0 4px 4px; }
+  .tip { font-size: 12px; min-width: 0; padding: 5px 8px; }
+  .tip .grid { column-gap: 12px; }
   .table-wrap { inset: 0 4px 4px 4px; }
 
   .legend { left: 8px; right: 8px; bottom: 8px; max-width: none; padding: 7px 9px 6px; }
@@ -238,6 +253,8 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
   .app { grid-template-columns: minmax(0, 1fr) minmax(280px, 38vw); grid-template-areas: "top top" "stage dock"; grid-template-rows: auto minmax(0, 1fr); }
   .top { padding: 4px 12px; }
   .runline { display: none; }
+  .search { flex: 1 1 160px; order: 0; }
+  .search input { padding: 4px 9px; }
   .dock { border-top: 0; border-left: 1px solid var(--hair); overflow-y: auto; padding-bottom: 0; }
   .dock-head { padding-top: 6px; }
   .dock-body { height: 150px; flex: none; }
