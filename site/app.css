@@ -157,6 +157,7 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
 .when { min-width: 270px; }
 .when strong, .where strong { font-weight: 600; font-variant-numeric: tabular-nums; }
 .when span, .where span { font-size: 13px; color: var(--ink-2); }
+.when .blend-now { color: var(--ink); font-size: 12.5px; }
 .where { flex: 1; min-width: 160px; }
 .dock-body { position: relative; height: 170px; padding: 0 8px 6px 8px; }
 #chart { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
