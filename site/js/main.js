@@ -4,7 +4,7 @@ import { scales } from "./colors.js";
 import { FieldLayer } from "./field-layer.js";
 import { Gis, nearestPlace } from "./layers.js";
 import { initSearch } from "./search.js";
-import { FanChart, tableHtml, fmt, stamp } from "./chart.js";
+import { FanChart, tableHtml, fmt, stamp, setPrecise } from "./chart.js";
 
 const $ = id => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
@@ -32,8 +32,10 @@ const LAYERS = [["counties", "Counties", true], ["states", "State lines", true],
 const DEFAULT_PT = [42.3584, -71.0598];
 const DAYS = d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
 const winText = w => (w ? `${w}-hour` : "storm-total");
+const PARAMS = [["snow", "Snowfall"], ["qpf", "Liquid precip."]];
+const PARAM_NOTE = { snow: "Snow depth from each member's precipitation, by the method chosen below.", qpf: "Total liquid precipitation (QPF): all the water the members forecast, rain, snow and ice, as liquid-equivalent inches. It does not depend on a snow-to-liquid ratio." };
 
-const S = { ens: "eps", method: "blend", prod: "pct", stat: "p50", cons: "pmm", thr: 1, win: 0, t: 0, pt: DEFAULT_PT, smooth: true, terrain: false, tk: 6, opacity: 0.85, dark: false, layers: new Set(LAYERS.filter(l => l[2]).map(l => l[0])) };
+const S = { ens: "eps", param: "snow", thrq: 3, method: "blend", prod: "pct", stat: "p50", cons: "pmm", thr: 1, win: 0, t: 0, pt: DEFAULT_PT, smooth: true, terrain: false, tk: 6, opacity: 0.85, dark: false, layers: new Set(LAYERS.filter(l => l[2]).map(l => l[0])) };
 const tried = new Set();
 let TERR = null, M, GRID, map, field, gis, chart, scale, bundle, places = [], playing = null, token = 0;
 const cache = new Map();
@@ -45,7 +47,7 @@ function readHash() {
   return o;
 }
 function writeHash() {
-  const c = map.getCenter(), p = new URLSearchParams({ e: S.ens, m: S.method, p: S.prod, s: S.stat, c: S.cons, k: S.thr, w: S.win, t: S.t, pt: S.pt.map(v => v.toFixed(3)).join(","), v: `${c.lat.toFixed(3)},${c.lng.toFixed(3)},${map.getZoom()}`, l: [...S.layers].join("."), ta: S.terrain ? 1 : 0, tk: S.tk, ...(S.ptName ? { pn: S.ptName } : {}) });
+  const c = map.getCenter(), p = new URLSearchParams({ e: S.ens, q: S.param, kq: S.thrq, m: S.method, p: S.prod, s: S.stat, c: S.cons, k: S.thr, w: S.win, t: S.t, pt: S.pt.map(v => v.toFixed(3)).join(","), v: `${c.lat.toFixed(3)},${c.lng.toFixed(3)},${map.getZoom()}`, l: [...S.layers].join("."), ta: S.terrain ? 1 : 0, tk: S.tk, ...(S.ptName ? { pn: S.ptName } : {}) });
   history.replaceState(null, "", "#" + p);
 }
 
@@ -67,11 +69,15 @@ function radio(box, items, value, on, label) {
 const mark = (box, v) => box.querySelectorAll("button").forEach(b => b.setAttribute("aria-checked", String(b.dataset.v === String(v))));
 
 // ---------- data ----------
-const key = () => `${S.ens}_${S.method}`;
+const qpf = () => S.param === "qpf";
+const fileKey = () => (qpf() ? "qpf" : S.method);
+const key = () => `${S.ens}_${fileKey()}`;
+const thresholds = () => (qpf() ? M.qpf_thresholds : M.thresholds);
+const thrIdx = () => (qpf() ? S.thrq : S.thr);
 async function getBundle() {
   const k = key();
   if (!cache.has(k)) {
-    const f = M.ensembles[S.ens].files[S.method];
+    const f = M.ensembles[S.ens].files[fileKey()];
     cache.set(k, loadBundle(`data/${f.file}`).catch(e => { cache.delete(k); throw e; }));
   }
   return cache.get(k);
@@ -85,10 +91,11 @@ async function refresh(full = true) {
   catch (e) {
     console.error(e);
     tried.add(key());
-    const alt = [[S.ens, "blend"], ...["all", "eps", "gefs", "geps"].map(k => [k, "blend"])].find(([k, m]) => M.ensembles[k]?.files[m] && !tried.has(`${k}_${m}`));
+    const first = qpf() ? "qpf" : "blend";
+    const alt = [[S.ens, first], ...["all", "eps", "gefs", "geps"].map(k => [k, first])].find(([k, m]) => M.ensembles[k]?.files[m] && !tried.has(`${k}_${m}`));
     if (alt && my === token) {                      // a file that will not load: show the next best data rather than an empty map
-      S.notice = `${shortName(S.ens)} / ${S.method} could not be loaded, so ${shortName(alt[0])} is shown instead.`;
-      [S.ens, S.method] = alt; mark($("ens"), S.ens); buildMethods(); S.t = snapTime(Math.min(S.t, E().fhrs.length - 1)); buildWindows(); buildTime(); ensNote(); runline();
+      S.notice = `${shortName(S.ens)} / ${fileKey()} could not be loaded, so ${shortName(alt[0])} is shown instead.`;
+      S.ens = alt[0]; if (!qpf()) S.method = alt[1]; mark($("ens"), S.ens); buildMethods(); S.t = snapTime(Math.min(S.t, E().fhrs.length - 1)); buildWindows(); buildTime(); ensNote(); runline();
       return refresh(full);
     }
     loading.hidden = false; loading.textContent = "Could not load this dataset. Reload the page to try again."; return;
@@ -105,10 +112,10 @@ const winIndex = () => M.windows.indexOf(activeWin());
 function currentSpec() {
   if (S.prod === "pct") return { kind: "pct", w: winIndex(), s: M.stats.indexOf(S.stat), t: S.t };
   if (S.prod === "cons") return { kind: "pct", w: winIndex(), s: M.stats.indexOf(S.cons), t: S.t };
-  if (S.prod === "prob") return { kind: "prob", w: winIndex(), k: S.thr, t: S.t };
+  if (S.prod === "prob") return { kind: "prob", w: winIndex(), k: thrIdx(), t: S.t };
   return { kind: "slr", t: S.t };
 }
-function scaleFor() { const sc = scales(S.dark); return S.prod === "prob" ? sc.prob : S.prod === "slr" ? sc.slr : sc.snow; }
+function scaleFor() { const sc = scales(S.dark); return S.prod === "prob" ? sc.prob : S.prod === "slr" ? sc.slr : qpf() ? sc.qpf : sc.snow; }
 
 function paint() {
   scale = scaleFor();
@@ -126,15 +133,15 @@ function paint() {
 }
 
 // Terrain adjustment applies to snowfall amounts and chances, not to the snow-to-liquid ratio.
-const terrainActive = () => !!(S.terrain && TERR && S.prod !== "slr");
+const terrainActive = () => !!(S.terrain && TERR && S.prod !== "slr" && !qpf());
 const terrainDz = () => TERR.dz[M.terrain.smooth[S.ens]] || Object.values(TERR.dz)[0];
 const pointFactor = (lat, lon) => (terrainActive() ? factor(sample(terrainDz(), TERR.grid, lat, lon) || 0, S.tk) : 1);
 
 function describe() {
-  const w = winText(activeWin()), ta = terrainActive() ? ", terrain-adjusted" : "";
-  if (S.prod === "pct") { const st = PCT.find(x => x[0] === S.stat); return { title: `${st[2]} ${w} snowfall`, unit: "inches" + ta, note: st[3] }; }
-  if (S.prod === "cons") { const st = CONS.find(x => x[0] === S.cons); return { title: `${st[1]} ${w} snowfall`, unit: "inches" + ta, note: st[3] }; }
-  if (S.prod === "prob") return { title: `Chance of at least ${M.thresholds[S.thr]} in, ${w}`, unit: "% of members" + ta, note: "Share of ensemble members reaching the amount" };
+  const w = winText(activeWin()), ta = terrainActive() ? ", terrain-adjusted" : "", what = qpf() ? "liquid precipitation" : "snowfall";
+  if (S.prod === "pct") { const st = PCT.find(x => x[0] === S.stat); return { title: `${st[2]} ${w} ${what}`, unit: "inches" + ta, note: st[3] }; }
+  if (S.prod === "cons") { const st = CONS.find(x => x[0] === S.cons); return { title: `${st[1]} ${w} ${what}`, unit: "inches" + ta, note: st[3] }; }
+  if (S.prod === "prob") return { title: `Chance of at least ${thresholds()[thrIdx()]} in ${qpf() ? "liquid, " : ""}${w}`, unit: "% of members" + ta, note: "Share of ensemble members reaching the amount" };
   return { title: "Effective snow-to-liquid ratio", unit: ":1", note: "Whole-run snow depth divided by snow-type liquid, mean member" };
 }
 
@@ -186,7 +193,7 @@ function timeLabels() {
   const ms = validMs(S.t), f = E().fhrs[S.t], w = activeWin(), v = validIdx(), pos = Math.max(0, v.indexOf(S.t));
   $("when-utc").textContent = `Valid ${stamp(ms)} · F+${String(f).padStart(3, "0")} h`;
   // local time first: on a phone this line is cut to one row, and the clock time is what is wanted from it
-  const lt = localStamp(ms), what = w ? `${w}-hour snow from ${stamp(ms - w * 3600e3)} to ${stamp(ms)}` : `Snow since the run began, ${stamp(Date.parse(E().init))}`;
+  const lt = localStamp(ms), kind = qpf() ? "liquid precipitation" : "snow", what = w ? `${w}-hour ${kind} from ${stamp(ms - w * 3600e3)} to ${stamp(ms)}` : `${qpf() ? "Liquid precipitation" : "Snow"} since the run began, ${stamp(Date.parse(E().init))}`;
   $("when-local").textContent = (lt ? `${lt} in New England · ` : "") + what; $("when-local").title = $("when-local").textContent;
   const t = $("time"); t.value = pos; t.setAttribute("aria-valuetext", `${stamp(ms)}, forecast hour ${f}`);
   chart?.setIndex(pos); blendNote();
@@ -207,7 +214,7 @@ function buildTime() {
   const w = activeWin(), hrs = v.map(i => E().fhrs[i]);
   $("win-note").textContent = !v.length ? "" : w
     ? `${w}-hour totals are complete from F+${hrs[0]} h to F+${hrs.at(-1)} h${hrs.at(-1) < E().fhrs.at(-1) ? `; after that this system publishes ${w < 6 ? "only 6-hourly" : "too coarse"} fields` : ""}.`
-    : "Snow from the start of the run to each time.";
+    : `${qpf() ? "Liquid precipitation" : "Snow"} from the start of the run to each time.`;
 }
 // Weekday and date under the slider where they fit, the weekday alone where they do not, and no label that would touch its neighbour.
 function layoutDays() {
@@ -254,7 +261,7 @@ function updateChart() {
   const pf = pointFactor(S.pt[0], S.pt[1]);
   for (const k of Object.keys(ser)) sub[k] = Float32Array.from(v, i => ser[k][i] * pf);
   const ta = terrainActive() ? ", terrain-adj." : "";
-  const d = { times: v.map(validMs), fhr: v.map(i => E().fhrs[i]), idx: v, series: sub, label: w ? `${w}-hour snow ending at each time (in${ta})` : `Snow since the run began (in${ta})` };
+  const d = { times: v.map(validMs), fhr: v.map(i => E().fhrs[i]), idx: v, series: sub, label: qpf() ? (w ? `${w}-hour liquid precipitation ending at each time (in)` : "Liquid precipitation since the run began (in)") : w ? `${w}-hour snow ending at each time (in${ta})` : `Snow since the run began (in${ta})` };
   lastSeries = d; chart.setData(d); chart.setIndex(Math.max(0, v.indexOf(S.t)));
   if (!$("table-wrap").hidden) $("table-wrap").innerHTML = tableHtml(d);
 }
@@ -268,13 +275,14 @@ function valueAt(lat, lon) {
 function showReadout(lat, lon) {
   const box = $("readout"), v = valueAt(lat, lon);
   if (!Number.isFinite(v)) { box.replaceChildren(); return; }
+  setPrecise(qpf());
   const unit = S.prod === "prob" ? "%" : S.prod === "slr" ? ":1" : "in";
   const big = el("div", { className: "big" }, S.prod === "slr" ? v.toFixed(1) : fmt(v), el("small", {}, unit));
   const kids = [big];
   if (S.prod !== "slr") {
     const ser = series(bundle, GRID, lat, lon, winIndex()), t = S.t, pf = pointFactor(lat, lon);
     kids.push(el("div", { className: "trio" }, ...[["10th", "p10"], ["50th", "p50"], ["90th", "p90"]].map(([n, k]) => el("span", {}, n + " ", el("b", {}, fmt(ser[k][t] * pf))))));
-    kids.push(el("div", { className: "sub" }, `Snow range, ${winText(activeWin())}`));
+    kids.push(el("div", { className: "sub" }, `${qpf() ? "Liquid range" : "Snow range"}, ${winText(activeWin())}`));
   }
   box.replaceChildren(...kids);
 }
@@ -283,7 +291,7 @@ const updateReadoutAtPoint = () => { if (S.hover) showReadout(...S.hover); else 
 // ---------- controls ----------
 function buildControls() {
   radio($("ens"), Object.keys(M.ensembles).map(k => [k, M.ensembles[k].short, k === "all" ? "pooled" : `${M.ensembles[k].members} mem.`]), S.ens, v => { switchEns(v); });
-  buildMethods(); buildProd();
+  buildParam(); buildMethods(); buildProd();
   buildWindows();
   $("time").addEventListener("input", e => { togglePlay(false); const v = validIdx(); setTime(v[+e.target.value]); });
   const box = $("layers");
@@ -333,7 +341,7 @@ function buildWindows() {
     v => { S.win = +v; mark($("win"), v); S.t = snapTime(S.t); buildTime(); refresh(); });
 }
 function buildProd() {
-  radio($("prod"), [["pct", "Amount"], ["cons", "Consensus"], ["prob", "Chance"], ["slr", "Ratio"]], S.prod,
+  radio($("prod"), [["pct", "Amount"], ["cons", "Consensus"], ["prob", "Chance"], ...(qpf() ? [] : [["slr", "Ratio"]])], S.prod,
     v => { S.prod = v; S.t = snapTime(S.t); buildProd(); buildTime(); refresh(); });
   const chips = $("prod-opts"), note = $("prod-note");
   if (S.prod === "pct") {
@@ -341,16 +349,31 @@ function buildProd() {
   } else if (S.prod === "cons") {
     radio(chips, CONS.map(([k, t]) => [k, t]), S.cons, v => { S.cons = v; mark(chips, v); noteFor(); refresh(false); });
   } else if (S.prod === "prob") {
-    radio(chips, M.thresholds.map((t, i) => [i, `${t} in`]), S.thr, v => { S.thr = +v; mark(chips, v); noteFor(); refresh(false); });
+    radio(chips, thresholds().map((t, i) => [i, `${t} in`]), thrIdx(), v => { if (qpf()) S.thrq = +v; else S.thr = +v; mark(chips, v); noteFor(); refresh(false); });
   } else chips.replaceChildren();
   function noteFor() {
     if (S.prod === "pct") note.textContent = PCT.find(x => x[0] === S.stat)[3] + ".";
     else if (S.prod === "cons") note.replaceChildren(CONS.find(x => x[0] === S.cons)[3] + " ", el("em", {}, CONS_CAUTION));
-    else if (S.prod === "prob") note.textContent = `Share of the members with at least ${M.thresholds[S.thr]} in of snow in the period.`;
+    else if (S.prod === "prob") note.textContent = `Share of the members with at least ${thresholds()[thrIdx()]} in of ${qpf() ? "liquid precipitation" : "snow"} in the period.`;
     else note.textContent = "Run-total snow depth divided by snow-type liquid, mean of the members. Needs at least 0.02 in of snow-liquid.";
   }
   noteFor();
   $("win-wrap").hidden = S.prod === "slr";
+}
+// Snowfall or total liquid precipitation.  The liquid fields have no snow-to-liquid method, ratio or terrain scaling, so those controls step aside.
+function buildParam() {
+  const has = Object.values(M.ensembles).some(e => e.files.qpf);
+  $("param").closest("section").hidden = !has;                                   // a build from before liquid precipitation was added has none
+  radio($("param"), PARAMS.map(([k, t]) => [k, t, null, k === "qpf" && !E().files.qpf]), S.param, v => setParam(v));
+  $("param-note").textContent = PARAM_NOTE[S.param];
+  $("method-sec").hidden = qpf(); $("terrain-sec").hidden = !TERR || qpf();
+}
+function setParam(v) {
+  if (v === S.param) return;
+  S.param = v;
+  if (qpf() && S.prod === "slr") S.prod = "pct";
+  setPrecise(qpf());
+  buildParam(); buildProd(); buildTime(); refresh();
 }
 // Another ensemble has its own list of forecast hours, so the same valid time is looked up in it rather than the same position.
 function switchEns(k) {
@@ -365,7 +388,8 @@ function onEnsChange() {
   mark($("ens"), S.ens);
   if (!E().methods.includes(S.method)) S.method = "blend";
   S.t = snapTime(Math.min(S.t, E().fhrs.length - 1));
-  buildMethods(); buildWindows(); buildTime(); ensNote(); runline(); refresh();
+  if (qpf() && !E().files.qpf) { S.param = "snow"; setPrecise(false); buildProd(); }
+  buildParam(); buildMethods(); buildWindows(); buildTime(); ensNote(); runline(); refresh();
 }
 function ensNote() {
   const e = E(), n = $("ens-note");
@@ -414,8 +438,12 @@ async function start() {
   $("terrain-sec").hidden = !TERR; if (!TERR) S.terrain = false;
   const h = readHash();
   if (h.e && M.ensembles[h.e]) S.ens = h.e;
+  if (h.q === "qpf" && Object.values(M.ensembles).every(e => e.files.qpf)) S.param = "qpf";
+  if (h.kq !== undefined && +h.kq >= 0 && +h.kq < (M.qpf_thresholds || []).length) S.thrq = +h.kq;
   if (h.m && M.methods[h.m] && E().methods.includes(h.m)) S.method = h.m;
   if (["pct", "cons", "prob", "slr"].includes(h.p)) S.prod = h.p;
+  if (S.param === "qpf" && S.prod === "slr") S.prod = "pct";
+  setPrecise(S.param === "qpf");
   if (h.s && PCT.some(x => x[0] === h.s)) S.stat = h.s;
   if (h.c && CONS.some(x => x[0] === h.c)) S.cons = h.c;
   if (h.k !== undefined && +h.k >= 0 && +h.k < M.thresholds.length) S.thr = +h.k;

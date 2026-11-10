@@ -14,6 +14,10 @@ const NWS_SNOW = {
 const BREWER_BUPU = ["#e0ecf4", "#bfd3e6", "#9ebcda", "#8c96c6", "#8c6bb1", "#88419d", "#810f7c", "#4d004b"];
 const PROB_EDGES = [5, 10, 20, 30, 40, 50, 70, 90];
 const PROB_LABELS = ["5–10", "10–20", "20–30", "30–40", "40–50", "50–70", "70–90", "90+"];
+// Total liquid precipitation (QPF): green through blue to purple, the hues a rain map is read in, so it never passes for the NWS snow ramp.
+const QPF_EDGES = [0.01, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
+const QPF_COLORS = ["#d9f0d3", "#a6dba0", "#5aae61", "#1b7837", "#1d91c0", "#225ea8", "#253494", "#810f7c", "#c51b8a", "#67001f"];
+const QPF_LABELS = ["0.01–0.1", "0.1–0.25", "0.25–0.5", "0.5–0.75", "0.75–1", "1–1.5", "1.5–2", "2–3", "3–4", "4+"];
 const SLR_EDGES = [-Infinity, 5, 7, 9, 11, 13, 16, 20, 25];
 const SLR_LIGHT = ["#a3262a", "#bb5e59", "#d18f88", "#e2bfb9", "#f0efec", "#bbcade", "#87a6ce", "#5481bd", "#1c5cab"];
 const SLR_DARK = ["#f08a80", "#bf756d", "#906159", "#634c47", "#383835", "#505960", "#697b8f", "#839fc0", "#9ec5f4"];
@@ -29,6 +33,7 @@ export function scales(dark) {
   const ord = a => (dark ? a.slice().reverse() : a);
   return {
     snow: make("snow", NWS_SNOW.edges, NWS_SNOW.colors, v => (v < 10 ? v.toFixed(v % 1 ? 1 : 0) : v.toFixed(0)), "in", NWS_SNOW.labels),
+    qpf: make("qpf", QPF_EDGES, QPF_COLORS, v => (v < 1 ? String(+v.toFixed(2)) : v.toFixed(v % 1 ? 1 : 0)), "in", QPF_LABELS),
     prob: make("prob", PROB_EDGES, ord(BREWER_BUPU), v => v.toFixed(0), "%", PROB_LABELS),
     slr: make("slr", SLR_EDGES, dark ? SLR_DARK : SLR_LIGHT, v => (Number.isFinite(v) ? v.toFixed(0) : ""), ":1"),
   };

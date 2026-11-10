@@ -4,12 +4,15 @@
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export const fmt = v => (!Number.isFinite(v) ? "–" : v < 10 ? v.toFixed(1) : v.toFixed(0));
+// Liquid precipitation is read to the hundredth of an inch, snowfall to the tenth.
+let precise = false;
+export const setPrecise = on => { precise = !!on; };
+export const fmt = v => (!Number.isFinite(v) ? "–" : precise ? (v < 10 ? v.toFixed(2) : v.toFixed(1)) : v < 10 ? v.toFixed(1) : v.toFixed(0));
 export const stamp = ms => { const d = new Date(ms); return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")} UTC`; };
 
 function niceMax(v) {
   if (!(v > 0)) return 1;
-  const steps = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 30, 36, 48, 60, 80, 100, 150];
+  const steps = [...(precise ? [0.1, 0.25, 0.5, 0.75, 1, 1.5] : []), 1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 30, 36, 48, 60, 80, 100, 150];
   for (const s of steps) if (v <= s) return s;
   return Math.ceil(v / 50) * 50;
 }
@@ -77,7 +80,7 @@ export class FanChart {
     const sw = g.narrow ? 14 : 16, gap = g.narrow ? 10 : 14;
     const lineKey = (col, w, dash) => (x0, y0) => { c.strokeStyle = col; c.lineWidth = w; c.setLineDash(dash || []); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + sw, y0); c.stroke(); c.setLineDash([]); };
     const boxKey = v => (x0, y0) => { c.fillStyle = css(v); c.fillRect(x0, y0 - 5, sw, 10); };
-    const title = g.narrow ? d.label.replace(/^(\d+)-hour snow ending at each time/, "$1-h snow").replace(/^Snow since the run began/, "Total snow") : d.label;
+    const title = g.narrow ? d.label.replace(/^(\d+)-hour (snow|liquid precipitation) ending at each time/, (_, h, k) => `${h}-h ${k === "snow" ? "snow" : "liquid"}`).replace(/^Snow since the run began/, "Total snow").replace(/^Liquid precipitation since the run began/, "Total liquid") : d.label;
     const keys = [[null, title], [lineKey(accent0, 2.25), "50th percentile"], [lineKey(ink20, 1.5, [5, 3]), "Mean"], [lineKey(ink30, 1.25, [2, 3]), "Max"],
                   [boxKey("--band-b"), "25–75%"], [boxKey("--band-a"), "10–90%"], [boxKey("--band-c"), "5–95%"]];
     const rowH = g.narrow ? 15 : 0, place = [];
@@ -89,13 +92,14 @@ export class FanChart {
     }
     g.t = 22 + row * rowH;
     // scale to the 95th percentile; the maximum member can be several times larger and would flatten everything else, so it is clipped and labelled
-    const maxAll = Math.max(...s.max.filter(Number.isFinite), 0), top = niceMax(Math.max(...s.p95.filter(Number.isFinite), 0.5) * 1.15);
+    const maxAll = Math.max(...s.max.filter(Number.isFinite), 0), top = niceMax(Math.max(...s.p95.filter(Number.isFinite), precise ? 0.1 : 0.5) * 1.15);
     const y = v => g.t + (1 - Math.min(v, top) / top) * (g.h - g.t - g.b);
     const hair = css("--hair"), ink2 = css("--ink-2"), ink3 = css("--ink-3"), accent = css("--accent-ink");
     // y grid and labels
-    const ticks = top <= 4 ? [0, 1, 2, 3, 4].filter(v => v <= top) : [0, top / 4, top / 2, (3 * top) / 4, top].map(v => Math.round(v * 10) / 10);
+    const qs = top <= 0.5 ? 0.1 : top <= 1 ? 0.25 : top <= 2 ? 0.5 : 1;
+    const ticks = precise && top <= 4 ? Array.from({ length: Math.floor(top / qs + 1e-9) + 1 }, (_, i) => i * qs) : top <= 4 ? [0, 1, 2, 3, 4].filter(v => v <= top) : [0, top / 4, top / 2, (3 * top) / 4, top].map(v => Math.round(v * 10) / 10);
     c.textAlign = "right"; c.textBaseline = "middle"; c.fillStyle = ink2; c.strokeStyle = hair; c.lineWidth = 1;
-    for (const v of ticks) { const yy = Math.round(y(v)) + 0.5; c.beginPath(); c.moveTo(g.l, yy); c.lineTo(g.w - g.r, yy); c.stroke(); c.fillText(fmt(v), g.l - 6, yy); }
+    for (const v of ticks) { const yy = Math.round(y(v)) + 0.5; c.beginPath(); c.moveTo(g.l, yy); c.lineTo(g.w - g.r, yy); c.stroke(); c.fillText(precise ? String(+v.toFixed(2)) : fmt(v), g.l - 6, yy); }
     // x: a tick at each 00 UTC, weekday and date (the weekday alone when the full labels would touch), never two labels on top of each other
     c.textAlign = "center"; c.textBaseline = "top";
     const mids = [];
