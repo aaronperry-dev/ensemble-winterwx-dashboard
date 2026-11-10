@@ -160,3 +160,13 @@ The models see smooth terrain (about 25 km boxes for the ECMWF and GEFS data, 50
 - `site/js/terrain.js` multiplies amounts by `1 + strength/100 × relief/100`, limited to 0.5–2. The default strength is 6 % per 100 m and the slider goes from 0 to 15. Chances of at least X inches use the model's chance of at least X divided by the factor, interpolated between the thresholds. The snow-to-liquid ratio is not changed.
 - It rescales snow the model already has. It cannot move a storm, change rain to snow or add snow where the model has none. The strength is a rule of thumb that has not been fitted to observations; compare it against snow reports before relying on it.
 - If the height download fails, the build continues without it and the control is hidden.
+
+## Working with whatever data exist
+
+The page must keep working when a model family, a forecast hour, a few members or a snow-to-liquid method is missing.
+
+* **A family that fails** (no complete run, a download that errors) is left out and logged; the others are built and blended as usual. The page starts on **All** when it exists and says which family is not in the build.
+* **Missing hours.** A forecast hour with no usable precipitation is skipped and the next hour covers the gap (a note says which hours). Members with no data at one hour are blank at that hour only.
+* **The combined view pools, hour by hour, whichever families have data at that hour**, each with equal total weight. It uses every hour any family has; at an hour one family lacks, the time label says which families the blend is made of. A method that one family cannot compute (missing inputs) is pooled from the families that can.
+* **Runs of different ages.** If the families cannot share one initialisation time (a run not yet complete), each uses its own newest complete run and the combined view lines them up by valid time: an older run is moved by its age and its snow is counted from the newest run's start. Runs more than `BLEND_MAX_LAG_H` (24 h) older than the newest are left out of the combined view but stay available on their own.
+* A dataset file that cannot be loaded in the browser falls back to the next best one with a note, instead of an empty map.
