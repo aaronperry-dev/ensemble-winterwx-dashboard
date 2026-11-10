@@ -27,6 +27,7 @@ NE_NAMES = {"Maine", "New Hampshire", "Vermont", "Massachusetts", "Connecticut",
 ABBR = {"Maine": "ME", "New Hampshire": "NH", "Vermont": "VT", "Massachusetts": "MA", "Connecticut": "CT", "Rhode Island": "RI",
         "New York": "NY", "New Jersey": "NJ"}
 # minimum Leaflet zoom at which a town's dot and name appear, by population
+# places with no population on file (the ZIP-code additions) are labelled from zoom 11
 TOWN_ZOOM = ((100_000, 6), (25_000, 8), (10_000, 9), (5_000, 10), (2_500, 11), (0, 12))
 WIDE_PAD_DEG = 4.0
 ROUTE_ZOOM = {"interstate": 7, "us": 9}
@@ -171,7 +172,7 @@ def build_points(out):
     for r in sorted(_csv_rows("places.csv"), key=lambda r: -int(r["pop"])):
         lon, lat, pop = float(r["lon"]), float(r["lat"]), int(r["pop"])
         if inside(lon, lat):
-            places.append([r["name"], r["state"], round(lat, 4), round(lon, 4), pop, next(z for lo, z in TOWN_ZOOM if pop >= lo)])
+            places.append([r["name"], r["state"], round(lat, 4), round(lon, 4), pop, (11 if pop == 0 else next(z for lo, z in TOWN_ZOOM if pop >= lo))])
     peaks = [[r["name"], r["state"], float(r["lat"]), float(r["lon"]), int(r["feet"]), int(r["tier"])] for r in _csv_rows("peaks.csv")
              if inside(float(r["lon"]), float(r["lat"]))]
     ski = [[r["name"], r["state"], float(r["lat"]), float(r["lon"])] for r in _csv_rows("ski_areas.csv") if inside(float(r["lon"]), float(r["lat"]))]
