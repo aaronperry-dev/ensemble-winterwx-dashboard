@@ -5,7 +5,9 @@ import { shieldSvg, shieldSize } from "./shields.js";
 
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 // Stacking, bottom to top: land and lakes (behind the model field, z 250), then the water mask over the field, the coast, county and state
-// lines, roads, and the labels.  Every line is drawn twice (a wider light or dark casing under a thin core) so it stays visible over any colour.
+// lines, roads, and the labels.  Every line is drawn twice (a wider light or dark casing under the core) so it stays visible over any colour.
+// Weights, in CSS pixels, from strongest to lightest: state and international lines 2.8 (casing 6.4), coast 2 (4.6), counties 1.4 (3.8).
+// The shaded relief (an image, z 255) sits just over the model field, so it shades the field, and under the water mask.
 const PANES = { land: 200, lakes: 210, water: 260, coast: 270, counties: 300, states: 310, roads: 320 };
 
 export class Gis {
@@ -13,6 +15,8 @@ export class Gis {
     this.map = map; this.base = base; this.data = {}; this.lab = {}; this.on = new Set(); this.vec = {}; this.mask = false;
     for (const [n, z] of Object.entries(PANES)) { const p = map.createPane(n); p.style.zIndex = z; p.style.pointerEvents = "none"; }
     this.renderers = Object.fromEntries(Object.keys(PANES).map(n => [n, L.canvas({ pane: n, padding: 0.5 })]));
+    const rp = map.createPane("relief"); rp.style.zIndex = 255; rp.style.pointerEvents = "none";
+    this.reliefInfo = null; this.reliefOpacity = 0.6;
     this.labelPane = map.createPane("labels"); this.labelPane.style.zIndex = 400; this.labelPane.style.pointerEvents = "none";
     this.labelBox = L.DomUtil.create("div", "lbl-layer", this.labelPane);
     map.on("moveend zoomend", () => this.labels());
@@ -29,16 +33,16 @@ export class Gis {
   styles() {
     const fill = this.mask ? 0.94 : 0;
     return {
-      land: { fill: true, fillColor: css("--land"), fillOpacity: 1, stroke: true, color: css("--coast"), weight: 0.8 },
-      lakes: { fill: true, fillColor: css("--water"), fillOpacity: 1, stroke: true, color: css("--coast"), weight: 0.6 },
+      land: { fill: true, fillColor: css("--land"), fillOpacity: 1, stroke: true, color: css("--coast"), weight: 1 },
+      lakes: { fill: true, fillColor: css("--water"), fillOpacity: 1, stroke: true, color: css("--coast"), weight: 0.8 },
       sea: { fill: true, fillColor: css("--water"), fillOpacity: fill, stroke: false },
       lakesTop: { fill: true, fillColor: css("--water"), fillOpacity: fill, stroke: false },
-      coastCase: { fill: false, color: css("--line-case"), weight: 3, opacity: 0.55, lineJoin: "round" },
-      coast: { fill: false, color: css("--coast-line"), weight: 1.1, lineJoin: "round" },
-      countiesCase: { fill: false, color: css("--line-case"), weight: 2.4, opacity: 0.4 },
-      counties: { fill: false, color: css("--county"), weight: 0.8 },
-      statesCase: { fill: false, color: css("--line-case"), weight: 4, opacity: 0.7, lineJoin: "round" },
-      states: { fill: false, color: css("--state"), weight: 1.7, lineJoin: "round" },
+      coastCase: { fill: false, color: css("--line-case"), weight: 4.6, opacity: 0.75, lineJoin: "round" },
+      coast: { fill: false, color: css("--coast-line"), weight: 2, lineJoin: "round" },
+      countiesCase: { fill: false, color: css("--line-case"), weight: 3.8, opacity: 0.6, lineJoin: "round" },
+      counties: { fill: false, color: css("--county"), weight: 1.4, lineJoin: "round" },
+      statesCase: { fill: false, color: css("--line-case"), weight: 6.4, opacity: 0.85, lineJoin: "round" },
+      states: { fill: false, color: css("--state"), weight: 2.8, lineJoin: "round" },
     };
   }
 
@@ -67,6 +71,14 @@ export class Gis {
         }
         this.vec[id + "Case"].addTo(this.map); this.vec[id].addTo(this.map);
       } else { this.vec[id + "Case"]?.remove(); this.vec[id]?.remove(); }
+    } else if (id === "relief") {
+      if (show && this.reliefInfo) {
+        if (!this.vec.relief) {
+          const [s0, w0, n0, e0] = this.reliefInfo.bounds;
+          this.vec.relief = L.imageOverlay(this.reliefInfo.url, [[s0, w0], [n0, e0]], { pane: "relief", opacity: this.reliefOpacity, interactive: false });
+        }
+        if (this.on.has("relief")) this.vec.relief.addTo(this.map);
+      } else this.vec.relief?.remove();
     } else if (id === "water") {
       this.mask = show; this.restyle();
     } else if (id === "roads") {
@@ -92,6 +104,8 @@ export class Gis {
     return casing ? { color: css("--road-casing"), weight: w + 2, opacity: on ? 0.9 : 0, lineJoin: "round" }
                   : { color: css(["--road-i", "--road-us", "--road-st"][c]), weight: w, opacity: on ? 1 : 0, lineJoin: "round" };
   }
+
+  setReliefOpacity(o) { this.reliefOpacity = o; this.vec.relief?.setOpacity(o); }
 
   restyle() {
     const st = this.styles();

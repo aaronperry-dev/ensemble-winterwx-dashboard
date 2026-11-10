@@ -28,7 +28,7 @@ const CONS = [
   ["samlpm", "SAM–LPM", "Spatially aligned mean with local probability matching (SAM–LPM)", "SAM, then local probability matching: the aligned position of SAM with the realistic peak amounts of LPMM. Experimental."]];
 const CONS_CAUTION = "Consensus maps show one plausible picture, not the likeliest outcome at every point, and they do not conserve totals. Use the percentiles and chances for point decisions.";
 const GROUPS = { blend: "Consensus", method: "Methods", reference: "Simple references" };
-const LAYERS = [["counties", "Counties", true], ["states", "State lines", true], ["roads", "Highways and shields", true], ["water", "Hide model over water", true], ["places", "Towns", true], ["peaks", "Peaks", false], ["ski", "Ski areas", false]];
+const LAYERS = [["relief", "Shaded relief", true], ["counties", "Counties", true], ["states", "State lines", true], ["roads", "Highways and shields", true], ["water", "Hide model over water", true], ["places", "Towns", true], ["peaks", "Peaks", false], ["ski", "Ski areas", false]];
 const DEFAULT_PT = [42.3584, -71.0598];
 const DAYS = d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
 const winText = w => (w ? `${w}-hour` : "storm-total");
@@ -298,10 +298,12 @@ function buildControls() {
   buildWindows();
   $("time").addEventListener("input", e => { togglePlay(false); const v = validIdx(); setTime(v[+e.target.value]); });
   const box = $("layers");
-  box.replaceChildren(...LAYERS.map(([id, text]) => {
+  box.replaceChildren(...LAYERS.filter(([id]) => id !== "relief" || M.relief).map(([id, text]) => {
     const i = el("input", { type: "checkbox", checked: S.layers.has(id) }); i.addEventListener("change", () => { i.checked ? S.layers.add(id) : S.layers.delete(id); gis.set(id, i.checked); writeHash(); });
     return el("label", { className: "check" }, i, el("span", {}, text));
   }));
+  $("relief-wrap").hidden = !M.relief;
+  $("relief-opacity").addEventListener("input", e => gis.setReliefOpacity(e.target.value / 100));
   $("opacity").value = Math.round(S.opacity * 100);
   $("opacity").addEventListener("input", e => { S.opacity = e.target.value / 100; field.setOpacity(S.opacity); });
   $("smooth").checked = S.smooth;
@@ -475,6 +477,7 @@ async function start() {
   if (!(v && v.length === 3 && v.every(Number.isFinite))) map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: [16, 16] });
   field = new FieldLayer({ opacity: S.opacity }); field.addTo(map);
   gis = new Gis(map, "data/gis");
+  if (M.relief) gis.reliefInfo = { url: `data/${M.relief.file}`, bounds: M.relief.bounds };
   await gis.baseLayers().catch(e => console.error(e));
   chart = new FanChart($("chart"), $("chart-tip"), i => { togglePlay(false); setTime(validIdx()[i]); });
 

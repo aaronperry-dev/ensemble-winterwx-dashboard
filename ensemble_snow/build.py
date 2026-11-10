@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import compute, config, consensus, encode, gis, slr, stats, terrain
+from . import compute, config, consensus, encode, gis, relief, slr, stats, terrain
 from .fields import EnsembleData
 from .sources.base import forecast_steps
 
@@ -635,12 +635,19 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
 
 
 def _finish_site(out: Path, manifest: dict, cache: Path, with_gis: bool, synthetic: bool = False, fetcher=None) -> dict:
-    """Write the manifest, copy the page, build the terrain file and the GIS layers."""
+    """Write the manifest, copy the page, build the terrain file, the shaded relief image and the GIS layers."""
     (out / "data").mkdir(parents=True, exist_ok=True)
     manifest.pop("terrain", None)
+    if with_gis and fetcher is None and not synthetic:
+        from .http import Fetcher
+        fetcher = Fetcher(workers=12)                                      # one fetcher for the terrain and the relief: they use the same elevation tiles
     terr = terrain.build(out / "data", cache, synthetic, fetcher) if with_gis else None
     if terr:
         manifest["terrain"] = terr
+    manifest.pop("relief", None)
+    shaded = relief.build(out / "data", cache, synthetic, fetcher) if with_gis else None
+    if shaded:
+        manifest["relief"] = shaded
     (out / "data" / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")))
     site = _ROOT / "site"
     if site.exists():

@@ -92,6 +92,20 @@ class _Binner:
         return np.where(self.n > 0, self.sum / np.maximum(self.n, 1), 0.0).astype(np.float32)
 
 
+def get_tile(fetcher, z: int, x: int, y: int) -> bytes | None:
+    """One Terrarium tile (PNG bytes), or None when it does not exist.  Kept on the fetcher: the terrain adjustment and the shaded relief of one build share
+    a fetcher and use the same tiles, so each is downloaded once."""
+    tiles = fetcher.__dict__.setdefault("_terrarium_tiles", {}) if hasattr(fetcher, "__dict__") else {}
+    key = (z, x, y)
+    if key not in tiles:
+        try:
+            tiles[key] = fetcher.get(TILE_URL.format(z=z, x=x, y=y))
+        except Exception as exc:                                           # a missing tile is open sea or outside the data: height 0
+            log.warning("terrain tile %d/%d/%d unavailable (%s)", z, x, y, exc)
+            tiles[key] = None
+    return tiles[key]
+
+
 def fetch_elevation(cache: Path, fetcher=None, workers: int = 12) -> np.ndarray:
     """Mean elevation (m) on the 0.05 deg grid; downloaded once and kept in ``cache``."""
     path = cache / "dem" / f"elev_z{ZOOM}_{STEP}_{config.GRID_LON0}_{config.GRID_LAT0}.npy"
@@ -104,12 +118,7 @@ def fetch_elevation(cache: Path, fetcher=None, workers: int = 12) -> np.ndarray:
     binner = _Binner()
 
     def get(xy):
-        x, y = xy
-        try:
-            return xy, fetcher.get(TILE_URL.format(z=ZOOM, x=x, y=y))
-        except Exception as exc:                                           # a missing tile is open sea or outside the data: height 0
-            log.warning("terrain tile %d/%d/%d unavailable (%s)", ZOOM, x, y, exc)
-            return xy, None
+        return xy, get_tile(fetcher, ZOOM, *xy)
 
     got = 0
     with ThreadPoolExecutor(workers) as ex:
