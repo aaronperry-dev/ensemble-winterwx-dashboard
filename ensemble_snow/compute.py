@@ -22,6 +22,7 @@ class SnowResult:
     blend_members: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     ptype_source: str = ""
+    qpf_in: np.ndarray | None = None                  # (T, M, ny, nx) cumulative total liquid precipitation (rain + melted snow), inches
 
 
 def _column(step: StepFields, lat, lon, shape, precip_mm3h=None) -> slr.Column:
@@ -57,11 +58,12 @@ def compute_snowfall(ens: EnsembleData, lat: np.ndarray, lon: np.ndarray, method
     prev_col = _column(prev, lat, lon, shape) if prev is not None else None
 
     cum_liq = zero.copy()
+    cum_qpf = zero.copy()
     cum = {k: zero.copy() for k in methods}
     cum["blend"] = zero.copy()
     avail: set[str] | None = None
     source_used: set[str] = set()
-    out_fhrs, out_liq = [], []
+    out_fhrs, out_liq, out_qpf = [], [], []
     out_cum: dict[str, list] = {k: [] for k in cum}
 
     skipped: list[int] = []
@@ -78,6 +80,7 @@ def compute_snowfall(ens: EnsembleData, lat: np.ndarray, lon: np.ndarray, method
         if gone.any():
             pc = np.where(gone[:, None, None], prev_precip, pc)
         d_mm = np.clip(pc - prev_precip, 0.0, None)
+        cum_qpf += d_mm / MM_PER_IN                                # total liquid precipitation: counted whatever the precipitation type
         # --- snow-type liquid of the interval
         if st.snow_liq_cum_mm is not None and np.isfinite(st.snow_liq_cum_mm).any():
             sl = st.snow_liq_cum_mm
@@ -127,6 +130,7 @@ def compute_snowfall(ens: EnsembleData, lat: np.ndarray, lon: np.ndarray, method
             out_fhrs.append(st.fhr)
             blank = gone[:, None, None]
             out_liq.append(np.where(blank, np.nan, cum_liq).astype(np.float32))
+            out_qpf.append(np.where(blank, np.nan, cum_qpf).astype(np.float32))
             for k in cum:
                 out_cum[k].append(np.where(blank, np.nan, cum[k]).astype(np.float32))
         prev, prev_fhr, prev_precip, prev_col, prev_snow_liq = st, st.fhr, pc, col, new_snow_liq
@@ -140,7 +144,8 @@ def compute_snowfall(ens: EnsembleData, lat: np.ndarray, lon: np.ndarray, method
         notes.append("Not available for this system (missing inputs): " + ", ".join(methods[k].label for k in dropped))
     blend_members = [k for k in config.BLEND if k in avail]
     result_methods = {k: fill_time_gaps(np.stack(v), out_fhrs, True) for k, v in out_cum.items() if k == "blend" or k in avail}
-    return SnowResult(out_fhrs, fill_time_gaps(np.stack(out_liq), out_fhrs, True), result_methods, blend_members, notes, " + ".join(sorted(source_used)))
+    return SnowResult(out_fhrs, fill_time_gaps(np.stack(out_liq), out_fhrs, True), result_methods, blend_members, notes, " + ".join(sorted(source_used)),
+                      fill_time_gaps(np.stack(out_qpf), out_fhrs, True))
 
 
 def effective_ratio(snow_in: np.ndarray, liquid_in: np.ndarray) -> np.ndarray:

@@ -51,6 +51,9 @@ CONSENSUS_STATS = ("pmm", "lpmm", "sam", "samlpm")
 ALL_STATS = PCT_STATS + CONSENSUS_STATS
 THRESHOLDS_IN = (0.1, 1, 2, 3, 4, 6, 8, 12, 18, 24)    # exceedance probabilities: P(snowfall >= x inches); the edges of the NWS snowfall legend
 AMT_STEP_IN = 0.05                             # u16 quantisation of snowfall (max 3276 in)
+# Total liquid precipitation (QPF) is shipped as a second parameter with the same statistics, in inches of liquid water.
+QPF_THRESHOLDS_IN = (0.01, 0.1, 0.25, 0.5, 1, 1.5, 2, 3)   # P(liquid precipitation >= x inches)
+QPF_STEP_IN = 0.01                             # u16 quantisation of QPF (max 655 in)
 SLR_STEP = 0.2                                 # u8 quantisation of the effective ratio (max ~50:1)
 MIN_LIQUID_FOR_SLR_IN = 0.02                   # effective ratio is only reported where this much snow-liquid has fallen
 

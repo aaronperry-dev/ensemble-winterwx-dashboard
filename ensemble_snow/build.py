@@ -9,6 +9,7 @@ No data are ever committed: GitHub Actions runs this, uploads ``public/`` as a P
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import multiprocessing as mp
@@ -122,24 +123,31 @@ def compute_shifts(cum: np.ndarray, fhrs: list[int], weights: np.ndarray | None)
     return dict(zip(config.WINDOWS_H, res))
 
 
+QPF = "qpf"          # the key of the total-liquid-precipitation bundle (it is not a snow-to-liquid method)
+
+
 def _bundle_job(key: str) -> tuple[str, int]:
     c = _CTX
+    if key == QPF:
+        return key, write_bundle(c["dir"] / c["names"][key], c["cum"][key], None, c["fhrs"], c["meta"][key], c["weights"], c["qpf_shifts"], parameter=QPF)
     return key, write_bundle(c["dir"] / c["names"][key], c["cum"][key], c["liquid"], c["fhrs"], c["meta"][key], c["weights"], c["shifts"])
 
 
-def write_bundles(out_dir: Path, names: dict[str, str], cum: dict[str, np.ndarray], liquid, fhrs, meta: dict[str, dict], weights, shifts) -> dict[str, int]:
-    """One bundle per method, in parallel.  ``cum``: method -> (T, M, ny, nx).  Returns the size of each file."""
-    done = _pmap(_bundle_job, list(names), dict(dir=out_dir, names=names, cum=cum, liquid=liquid, fhrs=fhrs, meta=meta, weights=weights, shifts=shifts))
+def write_bundles(out_dir: Path, names: dict[str, str], cum: dict[str, np.ndarray], liquid, fhrs, meta: dict[str, dict], weights, shifts,
+                  qpf_shifts=None) -> dict[str, int]:
+    """One bundle per method (and one for total liquid precipitation, key ``"qpf"``), in parallel.  ``cum``: key -> (T, M, ny, nx).  Returns the size of each file."""
+    done = _pmap(_bundle_job, list(names), dict(dir=out_dir, names=names, cum=cum, liquid=liquid, fhrs=fhrs, meta=meta, weights=weights, shifts=shifts,
+                                                 qpf_shifts=qpf_shifts))
     return dict(done)
 
 
-def _blocks(cum: np.ndarray, liquid: np.ndarray, fhrs: list[int], weights: np.ndarray | None, shifts: dict[int, np.ndarray]):
-    """cum, liquid: (T, M, ny, nx).  -> amt (W,S,T,ny,nx), prob (W,K,T,ny,nx), slr (T,ny,nx).  S = percentile statistics, then PMM / LPMM / SAM / SAM-LPM."""
+def _blocks(cum: np.ndarray, liquid: np.ndarray | None, fhrs: list[int], weights: np.ndarray | None, shifts: dict[int, np.ndarray], thresholds=config.THRESHOLDS_IN):
+    """cum, liquid: (T, M, ny, nx).  -> amt (W,S,T,ny,nx), prob (W,K,T,ny,nx), slr (T,ny,nx) (None without ``liquid``).  S = percentile statistics, then PMM / LPMM / SAM / SAM-LPM."""
     amt, prob = [], []
     T, _, ny, nx = cum.shape
     for w in config.WINDOWS_H:
         xw = stats.windowed(cum, w, fhrs)                                    # (T, M, ny, nx)
-        a, p = stats.ensemble_stats(np.moveaxis(xw, 1, 0), weights)           # (S, T, ny, nx), (K, T, ny, nx)
+        a, p = stats.ensemble_stats(np.moveaxis(xw, 1, 0), weights, thresholds)           # (S, T, ny, nx), (K, T, ny, nx)
         cons = np.empty((len(config.CONSENSUS_STATS), T, ny, nx), np.float32)
         for t in range(T):
             r = consensus.products(xw[t], shifts[w][t], weights)
@@ -147,6 +155,8 @@ def _blocks(cum: np.ndarray, liquid: np.ndarray, fhrs: list[int], weights: np.nd
                 cons[i, t] = r[k]
         amt.append(np.concatenate([a, cons]))
         prob.append(p)
+    if liquid is None:
+        return np.stack(amt), np.stack(prob), None
     eff = np.moveaxis(compute.effective_ratio(cum, liquid), 1, 0)           # (M, T, ny, nx)
     if weights is None:
         with np.errstate(all="ignore"):
@@ -161,9 +171,15 @@ def _blocks(cum: np.ndarray, liquid: np.ndarray, fhrs: list[int], weights: np.nd
     return np.stack(amt), np.stack(prob), slr_mean.astype(np.float32)
 
 
-def write_bundle(path: Path, cum, liquid, fhrs, meta: dict, weights=None, shifts=None) -> int:
+def write_bundle(path: Path, cum, liquid, fhrs, meta: dict, weights=None, shifts=None, parameter: str = "snow") -> int:
     if shifts is None:
         shifts = compute_shifts(cum, fhrs, weights)
+    if parameter == QPF:
+        amt, prob, _ = _blocks(cum, None, fhrs, weights, shifts, config.QPF_THRESHOLDS_IN)
+        return encode.write_bundle(path, [
+            dict(name="amt", data=amt, dtype="u16", lo=0.0, step=config.QPF_STEP_IN),
+            dict(name="prob", data=prob, dtype="u8", lo=0.0, step=1.0),
+        ], meta)
     amt, prob, slr_mean = _blocks(cum, liquid, fhrs, weights, shifts)
     return encode.write_bundle(path, [
         dict(name="amt", data=amt, dtype="u16", lo=0.0, step=config.AMT_STEP_IN),
@@ -173,8 +189,9 @@ def write_bundle(path: Path, cum, liquid, fhrs, meta: dict, weights=None, shifts
 
 
 def bundle_meta(ensemble: str, method: str, init: str, fhrs: list[int]) -> dict:
-    return {"ensemble": ensemble, "method": method, "init": init, "fhrs": fhrs, "stats": STAT_NAMES, "thresholds": list(config.THRESHOLDS_IN),
-            "windows": list(config.WINDOWS_H)}
+    qpf = method == QPF
+    return {"ensemble": ensemble, "method": method, "init": init, "fhrs": fhrs, "stats": STAT_NAMES,
+            "thresholds": list(config.QPF_THRESHOLDS_IN if qpf else config.THRESHOLDS_IN), "windows": list(config.WINDOWS_H), "parameter": "qpf" if qpf else "snow"}
 
 
 def window_times(fhrs: list[int]) -> dict[str, list[int]]:
@@ -217,9 +234,11 @@ def process_ensemble(ens: EnsembleData, out: Path, grid_lat, grid_lon, keep: dic
     shifts = compute_shifts(res.methods["blend"], res.fhrs, None)
     log.info("%s: spatial alignment of the members done in %.0f s", ens.key, time.time() - t0)
     init = ens.cycle.strftime("%Y-%m-%dT%H:%M:%SZ")
-    names = {k: f"{ens.key}_{k}.bin.gz" for k in order}
-    sizes = write_bundles(out / "data", names, res.methods, res.liquid_in, res.fhrs, {k: bundle_meta(ens.key, k, init, res.fhrs) for k in order}, None, shifts)
-    for k in order:
+    qpf_shifts = compute_shifts(res.qpf_in, res.fhrs, None)
+    names = {k: f"{ens.key}_{k}.bin.gz" for k in order + [QPF]}
+    sizes = write_bundles(out / "data", names, {**res.methods, QPF: res.qpf_in}, res.liquid_in, res.fhrs,
+                          {k: bundle_meta(ens.key, k, init, res.fhrs) for k in order + [QPF]}, None, shifts, qpf_shifts)
+    for k in order + [QPF]:
         files[k] = {"file": names[k], "bytes": sizes[k]}
         log.info("%s/%s  %.0f kB", ens.key, k, sizes[k] / 1e3)
     if keep is not None:
@@ -248,8 +267,46 @@ def _aligned(ens, res, ref_init: datetime):
     return lag, at
 
 
-def combine(kept: dict, out: Path) -> dict | None:
-    """Pool the systems into one ensemble in which every system carries equal total weight.
+def parse_blend_weights(spec: str | None, keys=None) -> dict[str, float] | str:
+    """The share each system has in the pooled view.  "" or "equal": every system counts the same (the default); "members": in proportion to
+    its member count; "eps=50,gefs=30,geps=20": explicit relative weights (any positive numbers, they are normalised)."""
+    spec = (spec or "").strip().lower()
+    if spec in ("", "equal", "members"):
+        return spec or "equal"
+    out: dict[str, float] = {}
+    for part in spec.split(","):
+        k, _, v = part.partition("=")
+        k = k.strip()
+        if k not in config.ENSEMBLES:
+            raise ValueError(f"blend weights: unknown system {k!r} (use eps, gefs, geps)")
+        try:
+            out[k] = float(v)
+        except ValueError:
+            raise ValueError(f"blend weights: {part.strip()!r} is not system=number") from None
+        if not out[k] > 0 or not np.isfinite(out[k]):
+            raise ValueError(f"blend weights: the weight of {k} must be a positive number")
+    missing = [k for k in (keys or []) if k not in out]
+    if missing:
+        raise ValueError(f"blend weights: give a weight for every system being built (missing {', '.join(missing)}), or use 'equal' or 'members'")
+    return out
+
+
+def system_shares(spec, systems: list[str], sizes: dict[str, int]) -> dict[str, float]:
+    """Each system's share of the pool, summing to 1, over the systems actually in it (an absent system's weight is shared out by renormalising)."""
+    if spec == "members":
+        raw = {k: float(sizes[k]) for k in systems}
+    elif isinstance(spec, dict):
+        raw = {k: spec[k] for k in systems if k in spec}
+        if len(raw) != len(systems):
+            raise ValueError("blend weights: no weight given for " + ", ".join(k for k in systems if k not in spec))
+    else:
+        raw = {k: 1.0 for k in systems}
+    tot = sum(raw.values())
+    return {k: raw[k] / tot for k in systems}
+
+
+def combine(kept: dict, out: Path, blend_weights="equal") -> dict | None:
+    """Pool the systems into one ensemble.  By default every system carries equal total weight (``blend_weights`` can change the shares).
 
     Every system stays in the pool at every hour, so the pooled running totals only ever grow: a system (or member) that lacks an hour that
     another has is given the straight line between its neighbouring hours, and the pool ends where the earliest-ending system's data end.
@@ -309,18 +366,30 @@ def combine(kept: dict, out: Path) -> dict | None:
 
     pooled = {m: pool(lambda r, m=m: r.methods.get(m)) for m in methods}
     liq = pool(lambda r: r.liquid_in)
-    weights = np.concatenate([np.full(sizes[k], 1.0 / sizes[k]) for k in systems])
+    qpf = pool(lambda r: r.qpf_in)
+    shares = system_shares(blend_weights, systems, sizes)
+    # a member's weight is its system's share spread over the system's members (scaled so equal shares give 1/size, as before)
+    weights = np.concatenate([np.full(sizes[k], shares[k] * len(systems) / sizes[k]) for k in systems])
+    equal = blend_weights == "equal"
+    log.info("all: system weights %s", {k: f"{100 * v:.1f}%" for k, v in shares.items()})
     t0 = time.time()
     shifts = compute_shifts(pooled["blend"], fhrs, weights)
+    qpf_shifts = compute_shifts(qpf, fhrs, weights)
     log.info("all: spatial alignment of the members done in %.0f s", time.time() - t0)
     init = ref.strftime("%Y-%m-%dT%H:%M:%SZ")
-    names = {m: f"all_{m}.bin.gz" for m in methods}
-    written = write_bundles(out / "data", names, pooled, liq, fhrs, {m: bundle_meta("all", m, init, fhrs) for m in methods}, weights, shifts)
-    files = {m: {"file": names[m], "bytes": written[m]} for m in methods}
+    names = {m: f"all_{m}.bin.gz" for m in methods + [QPF]}
+    written = write_bundles(out / "data", names, {**pooled, QPF: qpf}, liq, fhrs, {m: bundle_meta("all", m, init, fhrs) for m in methods + [QPF]}, weights, shifts,
+                            qpf_shifts)
+    files = {m: {"file": names[m], "bytes": written[m]} for m in methods + [QPF]}
     contrib = [",".join(k for k in systems if f in align[k][1]) for f in fhrs]       # systems with data of their own at the hour
     filled = [",".join(k for k in systems if f not in align[k][1]) for f in fhrs]    # systems whose value at the hour is a straight line between neighbours
     shorts = " + ".join(config.ENSEMBLES[k].short for k in systems)
-    notes = ["Every system is pooled at every hour with equal total weight, whatever its member count (a GEPS member counts for more than an EPS member)."]
+    pct = {k: f"{config.ENSEMBLES[k].short} {100 * shares[k]:.0f}%" for k in systems}
+    if equal:
+        notes = ["Every system is pooled at every hour with equal total weight, whatever its member count (a GEPS member counts for more than an EPS member)."]
+    else:
+        notes = [f"Systems are pooled at every hour with weights {', '.join(pct.values())} ("
+                 + ("in proportion to member counts, so every member counts the same" if blend_weights == "members" else "set for this build") + "); members within a system count the same."]
     for k in systems:
         lag = align[k][0]
         if lag:
@@ -336,10 +405,10 @@ def combine(kept: dict, out: Path) -> dict | None:
     if any(filled):
         notes.append("Where a system has no data for an hour that another has, its totals are taken as a straight line between its neighbouring hours.")
     return {"label": "All systems combined", "short": "All", "center": " + ".join({"eps": "ECMWF", "gefs": "NOAA", "geps": "ECCC"}[k] for k in systems),
-            "native": f"{total} members ({shorts}); each system carries equal weight", "license": "see each system", "url": "",
+            "native": f"{total} members ({shorts}); " + ("each system carries equal weight" if equal else "weights " + ", ".join(pct.values())), "license": "see each system", "url": "",
             "init": init, "members": total, "fhrs": fhrs, "methods": methods, "blend_members": [],
             "ptype": "per system", "notes": notes, "files": files, "window_times": window_times(fhrs),
-            "systems": [{"key": k, "short": config.ENSEMBLES[k].short, "init": kept[k][0].cycle.strftime("%Y-%m-%dT%H:%M:%SZ"), "members": sizes[k]} for k in systems],
+            "systems": [{"key": k, "short": config.ENSEMBLES[k].short, "init": kept[k][0].cycle.strftime("%Y-%m-%dT%H:%M:%SZ"), "members": sizes[k], "weight": round(shares[k], 4)} for k in systems],
             "contrib": contrib, "filled": filled}
 
 
@@ -478,7 +547,8 @@ def already_deployed(url: str, cycles: dict[str, datetime], fingerprint: str, fe
 
 def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cache: Path, force_cycle: datetime | None, common: bool,
                workers: int, with_gis: bool = True, now: datetime | None = None, fetcher=None, skip_if_deployed: str | None = None,
-               use_cache: bool | None = None) -> dict | None:
+               use_cache: bool | None = None, blend_weights: str | None = None) -> dict | None:
+    blend_weights = parse_blend_weights(blend_weights if blend_weights is not None else os.environ.get("ENSNOW_BLEND_WEIGHTS"), keys)
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     lon, lat = config.grid_axes()
     if synthetic:
@@ -497,7 +567,8 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
     if not cycles:
         raise SystemExit("no complete forecast run found for any requested system")
 
-    fingerprint = code_fingerprint()
+    wtag = "" if blend_weights == "equal" else "-w" + hashlib.sha1(json.dumps(blend_weights, sort_keys=True).encode()).hexdigest()[:6]   # the default keeps its old fingerprint
+    fingerprint = code_fingerprint() + wtag
     if skip_if_deployed and not synthetic and already_deployed(skip_if_deployed, cycles, fingerprint):
         log.info("the live site already shows %s; nothing to do", {k: f"{t:%Y-%m-%d %H}Z" for k, t in cycles.items()})
         return None
@@ -506,7 +577,7 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
     out.mkdir(parents=True, exist_ok=True)
 
     # Same pipeline code and same model runs as an earlier build (only the page changed): reuse its finished data files, nothing to download or compute.
-    pfp = pipeline_fingerprint()
+    pfp = pipeline_fingerprint() + wtag
     bdir = _bundle_dir(cache, pfp, cycles, max_fhr)
     if use_cache and set(cycles) == set(keys):
         manifest = restore_bundles(bdir, out)
@@ -542,14 +613,14 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
             log.exception("%s failed; continuing without it", k)
     if not manifest_ens:
         raise SystemExit("every system failed")
-    comb = combine(kept, out)
+    comb = combine(kept, out, blend_weights)
     if comb:
         manifest_ens["all"] = comb
 
     manifest = {
         "version": 1, "fingerprint": fingerprint, "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "synthetic": synthetic,
         "grid": {"lon0": float(lon[0]), "lat0": float(lat[0]), "dlon": config.GRID_STEP, "dlat": config.GRID_STEP, "nx": len(lon), "ny": len(lat)},
-        "bounds": list(config.NEW_ENGLAND_BOUNDS), "stats": STAT_NAMES, "thresholds": list(config.THRESHOLDS_IN), "windows": list(config.WINDOWS_H),
+        "bounds": list(config.NEW_ENGLAND_BOUNDS), "stats": STAT_NAMES, "thresholds": list(config.THRESHOLDS_IN), "qpf_thresholds": list(config.QPF_THRESHOLDS_IN), "windows": list(config.WINDOWS_H),
         "out_step": config.OUT_STEP_H, "amt_step": config.AMT_STEP_IN, "slr_step": config.SLR_STEP,
         "methods": method_info(), "ensembles": manifest_ens,
     }
@@ -629,6 +700,8 @@ def main(argv=None) -> int:
     ap.add_argument("--cycle", help="force this initialisation time, YYYYMMDDHH (UTC) for every system")
     ap.add_argument("--independent", action="store_true", help="use each system's own newest run instead of a common initialisation time")
     ap.add_argument("--synthetic", action="store_true", help="demo data (no network for the models)")
+    ap.add_argument("--blend-weights", default=None, metavar="SPEC",
+                    help='weights of the systems in the combined view: "equal" (default), "members" (by member count) or e.g. "eps=50,gefs=30,geps=20"')
     ap.add_argument("--no-gis", action="store_true")
     ap.add_argument("--no-cache", action="store_true", help="ignore the cached downloads and finished data files (they are still refreshed)")
     ap.add_argument("--workers", type=int, default=12)
@@ -641,6 +714,10 @@ def main(argv=None) -> int:
     for k in keys:
         if k not in config.ENSEMBLES:
             ap.error(f"unknown ensemble {k!r}")
+    try:
+        parse_blend_weights(a.blend_weights if a.blend_weights is not None else os.environ.get("ENSNOW_BLEND_WEIGHTS"), keys)
+    except ValueError as e:
+        ap.error(str(e))
     if a.probe:
         return probe(keys, a.max_fhr)
     start_resource_monitor()
@@ -648,7 +725,7 @@ def main(argv=None) -> int:
         os.environ["ENSNOW_NO_CACHE"] = "1"
     force = datetime.strptime(a.cycle, "%Y%m%d%H") if a.cycle else None
     build_site(Path(a.out), keys, synthetic=a.synthetic, max_fhr=a.max_fhr, cache=Path(a.cache), force_cycle=force, common=not a.independent,
-               workers=a.workers, with_gis=not a.no_gis, skip_if_deployed=a.skip_if_deployed)
+               workers=a.workers, with_gis=not a.no_gis, skip_if_deployed=a.skip_if_deployed, blend_weights=a.blend_weights)
     return 0
 
 
