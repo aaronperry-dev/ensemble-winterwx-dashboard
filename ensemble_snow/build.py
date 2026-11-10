@@ -268,6 +268,15 @@ def combine(kept: dict, out: Path) -> dict | None:
         log.info("combined view skipped: fewer than two systems can be lined up")
         return None
     ends = {k: max(align[k][1], default=0) for k in systems}
+    longest = max(ends.values())
+    short = [k for k in systems if ends[k] < config.BLEND_MIN_SHARE * longest]
+    if short:                                    # a system that stops early would cut the pool short for everyone
+        log.info("combined view: leaving out %s (data end at F+%s h, the longest at F+%d h)", short, [ends[k] for k in short], longest)
+        systems = [k for k in systems if k not in short]
+        if len(systems) < 2:
+            log.info("combined view skipped: fewer than two systems of usable length")
+            return None
+        ends = {k: ends[k] for k in systems}
     last = min(ends.values())                    # beyond the earliest ending the pool would lose a system, and the running totals would jump
     every = sorted(set().union(*[set(align[k][1]) for k in systems]))
     fhrs = [f for f in every if f <= last]
@@ -317,7 +326,9 @@ def combine(kept: dict, out: Path) -> dict | None:
         if lag:
             notes.append(f"{config.ENSEMBLES[k].short} is from the run {lag} h before the newest; it is lined up by valid time and its snow is counted from the newest run's start.")
     for k in kept:
-        if k not in systems:
+        if k in short:
+            notes.append(f"{config.ENSEMBLES[k].short} is not in the combined view (its data end at F+{max(align[k][1], default=0)} h, far short of the others).")
+        elif k not in systems:
             notes.append(f"{config.ENSEMBLES[k].short} is not in the combined view (its run is too old to line up).")
     if last < max(every):
         ended = " and ".join(config.ENSEMBLES[k].short for k in systems if ends[k] == last)
@@ -458,6 +469,8 @@ def already_deployed(url: str, cycles: dict[str, datetime], fingerprint: str, fe
         return False
     if live.get("fingerprint") != fingerprint or live.get("synthetic"):
         return False
+    if any(live.get("ensembles", {}).get(k, {}).get("partial") for k in cycles):       # an incomplete download: a later build may do better
+        return False
     want = {k: t.strftime("%Y-%m-%dT%H:%M:%SZ") for k, t in cycles.items()}
     have = {k: live.get("ensembles", {}).get(k, {}).get("init") for k in cycles}
     return want == have
@@ -505,6 +518,8 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
     manifest_ens, kept = {}, {}
     ffp = fetch_fingerprint()
     for k in keys:
+        if use_cache and hasattr(sources.get(k), "part_root"):             # a download that can be resumed keeps its finished hours here
+            sources[k].part_root, sources[k].part_tag = cache, ffp
         if k not in cycles:
             continue
         log.info("=== %s  %s ===", k, cycles[k])
@@ -515,12 +530,14 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
                 log.info("%s: using the download cached from an earlier build (no data fetched)", k)
             else:
                 ens = sources[k].load(cycles[k], steps, workers)
-                if use_cache:
+                if use_cache and not ens.partial:                     # an incomplete download is not worth reusing: the next attempt resumes it
                     try:
                         save_decoded(dpath, ens)
                     except Exception:
                         log.exception("%s: could not cache the download (the build goes on)", k)
             manifest_ens[k] = process_ensemble(ens, out, lat, lon, kept)
+            if ens.partial:
+                manifest_ens[k]["partial"] = True
         except Exception:
             log.exception("%s failed; continuing without it", k)
     if not manifest_ens:
@@ -536,7 +553,8 @@ def build_site(out: Path, keys: list[str], *, synthetic: bool, max_fhr: int, cac
         "out_step": config.OUT_STEP_H, "amt_step": config.AMT_STEP_IN, "slr_step": config.SLR_STEP,
         "methods": method_info(), "ensembles": manifest_ens,
     }
-    if use_cache and set(keys) <= set(manifest_ens) and set(cycles) == set(keys):           # a build missing a system is not worth reusing
+    if use_cache and set(keys) <= set(manifest_ens) and set(cycles) == set(keys) and not any(e.get("partial") for e in manifest_ens.values()):
+        # a build missing a system, or with an incomplete download, is not worth reusing
         (out / "data").mkdir(parents=True, exist_ok=True)
         try:
             save_bundles(bdir, out, manifest)

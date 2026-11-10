@@ -53,6 +53,7 @@ class EnsembleData:
     notes: list[str] = field(default_factory=list)  # what was estimated / missing, shown on the page
     ptype_source: str = ""                         # "native flag" | "native snow accumulation" | "wet-bulb ramp"
     synthetic: bool = False
+    partial: bool = False                          # some forecast hours could not be downloaded (the run is shorter or has holes)
 
     @property
     def fhrs(self) -> list[int]:

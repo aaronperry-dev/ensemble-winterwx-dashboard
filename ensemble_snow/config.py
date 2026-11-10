@@ -40,6 +40,7 @@ WINDOWS_H = (3, 6, 12, 24, 48, 0)
 # The combined view pools whichever systems have data at each time.  A system whose run is older than the newest one is lined up by valid time;
 # it is left out of the pool when it is more than this many hours older than the newest run.
 BLEND_MAX_LAG_H = 24
+BLEND_MIN_SHARE = 0.6        # a system whose data end before this share of the longest one's is left out of the combined view
 EPS_PL_STEP_H = 6               # ECMWF upper-air fields (the bulk of the download) are fetched every 6 h; odd 3-hourly steps interpolate between them
 
 # --------------------------------------------------------------------------- statistics shipped to the browser
