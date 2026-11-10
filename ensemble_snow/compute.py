@@ -139,8 +139,8 @@ def compute_snowfall(ens: EnsembleData, lat: np.ndarray, lon: np.ndarray, method
     if dropped:
         notes.append("Not available for this system (missing inputs): " + ", ".join(methods[k].label for k in dropped))
     blend_members = [k for k in config.BLEND if k in avail]
-    result_methods = {k: np.stack(v) for k, v in out_cum.items() if k == "blend" or k in avail}
-    return SnowResult(out_fhrs, np.stack(out_liq), result_methods, blend_members, notes, " + ".join(sorted(source_used)))
+    result_methods = {k: fill_time_gaps(np.stack(v), out_fhrs, True) for k, v in out_cum.items() if k == "blend" or k in avail}
+    return SnowResult(out_fhrs, fill_time_gaps(np.stack(out_liq), out_fhrs, True), result_methods, blend_members, notes, " + ".join(sorted(source_used)))
 
 
 def effective_ratio(snow_in: np.ndarray, liquid_in: np.ndarray) -> np.ndarray:
@@ -148,3 +148,40 @@ def effective_ratio(snow_in: np.ndarray, liquid_in: np.ndarray) -> np.ndarray:
     with np.errstate(invalid="ignore", divide="ignore"):
         r = snow_in / liquid_in
     return np.where(liquid_in >= config.MIN_LIQUID_FOR_SLR_IN, r, np.nan).astype(np.float32)
+
+
+def fill_time_gaps(a: np.ndarray, hours, start_zero: bool = False) -> np.ndarray:
+    """Fill NaN along axis 0 (time) of a running total by linear interpolation in ``hours`` between the nearest finite values before and after.
+
+    A running total never falls and is never missing in the middle of a run, so a member or a system that lacks one hour (a file that did not
+    download, an hour another system has) is given the straight-line value between its neighbouring hours instead of dropping out of that hour's
+    statistics, which would make the totals jump up and down.  Nothing is invented before the first or after the last finite value, except that
+    with ``start_zero`` the total at hour 0 is taken to be zero."""
+    h = np.asarray(hours, dtype=float)
+    if start_zero:
+        a = np.concatenate([np.zeros((1,) + a.shape[1:], a.dtype), a])
+        h = np.concatenate([[0.0], h])
+    valid = np.isfinite(a)
+    if valid.all() or not valid.any():
+        return a[1:] if start_zero else a
+    out = a.copy()
+    before = np.full(a.shape, -1, np.int16)
+    after = np.full(a.shape, -1, np.int16)
+    last = np.full(a.shape[1:], -1, np.int16)
+    for t in range(a.shape[0]):
+        last = np.where(valid[t], t, last)
+        before[t] = last
+    nxt = np.full(a.shape[1:], -1, np.int16)
+    for t in range(a.shape[0] - 1, -1, -1):
+        nxt = np.where(valid[t], t, nxt)
+        after[t] = nxt
+    for t in range(a.shape[0]):
+        miss = ~valid[t] & (before[t] >= 0) & (after[t] >= 0)
+        if not miss.any():
+            continue
+        idx = np.nonzero(miss)
+        p, n = before[t][idx], after[t][idx]
+        va, vb = a[(p,) + idx], a[(n,) + idx]
+        w = ((h[t] - h[p]) / (h[n] - h[p])).astype(a.dtype)
+        out[(t,) + idx] = va + w * (vb - va)
+    return out[1:] if start_zero else out

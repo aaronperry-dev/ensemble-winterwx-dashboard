@@ -249,11 +249,11 @@ def _aligned(ens, res, ref_init: datetime):
 
 
 def combine(kept: dict, out: Path) -> dict | None:
-    """Pool the systems into one ensemble in which every system present at a time carries equal total weight.
+    """Pool the systems into one ensemble in which every system carries equal total weight.
 
-    Whatever is available is used, at each forecast hour separately: a system that lacks an hour (or a method, or has an older run) is simply
-    absent from that hour's pool, and the others are pooled as they are.  The members of an absent system are NaN there, which every statistic
-    leaves out per cell while the remaining systems keep their equal weights.  Systems with runs of different ages are lined up by valid time."""
+    Every system stays in the pool at every hour, so the pooled running totals only ever grow: a system (or member) that lacks an hour that
+    another has is given the straight line between its neighbouring hours, and the pool ends where the earliest-ending system's data end.
+    A method that a system cannot compute is pooled from the systems that can.  Runs of different ages are lined up by valid time."""
     systems = list(kept)
     if len(systems) < 2:
         return None
@@ -267,10 +267,15 @@ def combine(kept: dict, out: Path) -> dict | None:
     if len(systems) < 2:
         log.info("combined view skipped: fewer than two systems can be lined up")
         return None
-    fhrs = sorted(set().union(*[set(align[k][1]) for k in systems]))
+    ends = {k: max(align[k][1], default=0) for k in systems}
+    last = min(ends.values())                    # beyond the earliest ending the pool would lose a system, and the running totals would jump
+    every = sorted(set().union(*[set(align[k][1]) for k in systems]))
+    fhrs = [f for f in every if f <= last]
     if not fhrs:
+        log.info("combined view skipped: the systems have no hours in common")
         return None
-    pos = {f: i for i, f in enumerate(fhrs)}
+    pos = {f: i for i, f in enumerate(every)}
+    keep = len(fhrs)
     methods = [m for m in ["blend"] + list(slr.METHODS) if any(m in kept[k][1].methods for k in systems)]
     sizes = {k: len(kept[k][0].members) for k in systems}
     total = sum(sizes.values())
@@ -278,15 +283,19 @@ def combine(kept: dict, out: Path) -> dict | None:
     ny, nx = kept[systems[0]][1].liquid_in.shape[2:]
 
     def pool(get):
-        arr = np.full((len(fhrs), total, ny, nx), np.nan, np.float32)
+        """Members x hours of running totals since the newest run's start.  A system without an hour that others have gets the straight line
+        between its neighbouring hours (never extrapolated), so every system stays in the pool at every hour and the totals only ever grow."""
+        arr = np.full((keep, total, ny, nx), np.nan, np.float32)
         for k in systems:
             lag, at = align[k]
             src = get(kept[k][1])
             if src is None:
                 continue
             base = src[kept[k][1].fhrs.index(lag)] if lag else 0.0
+            blk = np.full((len(every), sizes[k], ny, nx), np.nan, np.float32)
             for f, i in at.items():
-                arr[pos[f], start[k]:start[k] + sizes[k]] = src[i] - base
+                blk[pos[f]] = src[i] - base
+            arr[:, start[k]:start[k] + sizes[k]] = compute.fill_time_gaps(blk, every, start_zero=True)[:keep]
         return arr
 
     pooled = {m: pool(lambda r, m=m: r.methods.get(m)) for m in methods}
@@ -299,9 +308,10 @@ def combine(kept: dict, out: Path) -> dict | None:
     names = {m: f"all_{m}.bin.gz" for m in methods}
     written = write_bundles(out / "data", names, pooled, liq, fhrs, {m: bundle_meta("all", m, init, fhrs) for m in methods}, weights, shifts)
     files = {m: {"file": names[m], "bytes": written[m]} for m in methods}
-    contrib = [",".join(k for k in systems if f in align[k][1]) for f in fhrs]
+    contrib = [",".join(k for k in systems if f in align[k][1]) for f in fhrs]       # systems with data of their own at the hour
+    filled = [",".join(k for k in systems if f not in align[k][1]) for f in fhrs]    # systems whose value at the hour is a straight line between neighbours
     shorts = " + ".join(config.ENSEMBLES[k].short for k in systems)
-    notes = ["Whatever is available at each forecast hour is pooled, each system with equal total weight (a GEPS member counts for more than an EPS member)."]
+    notes = ["Every system is pooled at every hour with equal total weight, whatever its member count (a GEPS member counts for more than an EPS member)."]
     for k in systems:
         lag = align[k][0]
         if lag:
@@ -309,12 +319,17 @@ def combine(kept: dict, out: Path) -> dict | None:
     for k in kept:
         if k not in systems:
             notes.append(f"{config.ENSEMBLES[k].short} is not in the combined view (its run is too old to line up).")
+    if last < max(every):
+        ended = " and ".join(config.ENSEMBLES[k].short for k in systems if ends[k] == last)
+        notes.append(f"The combined view ends at F+{last} h, where {ended} data end; later hours are in each system's own view.")
+    if any(filled):
+        notes.append("Where a system has no data for an hour that another has, its totals are taken as a straight line between its neighbouring hours.")
     return {"label": "All systems combined", "short": "All", "center": " + ".join({"eps": "ECMWF", "gefs": "NOAA", "geps": "ECCC"}[k] for k in systems),
             "native": f"{total} members ({shorts}); each system carries equal weight", "license": "see each system", "url": "",
             "init": init, "members": total, "fhrs": fhrs, "methods": methods, "blend_members": [],
             "ptype": "per system", "notes": notes, "files": files, "window_times": window_times(fhrs),
             "systems": [{"key": k, "short": config.ENSEMBLES[k].short, "init": kept[k][0].cycle.strftime("%Y-%m-%dT%H:%M:%SZ"), "members": sizes[k]} for k in systems],
-            "contrib": contrib}
+            "contrib": contrib, "filled": filled}
 
 
 # --------------------------------------------------------------------------- site
