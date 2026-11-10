@@ -3,6 +3,7 @@ import { loadBundle, extract, series, sample } from "./bundle.js";
 import { scales } from "./colors.js";
 import { FieldLayer } from "./field-layer.js";
 import { Gis, nearestPlace } from "./layers.js";
+import { initSearch } from "./search.js";
 import { FanChart, tableHtml, fmt, stamp } from "./chart.js";
 
 const $ = id => document.getElementById(id);
@@ -14,7 +15,7 @@ const PCT = [
   ["p5", "5th", "5th percentile", "Only 1 member in 20 has less than this"],
   ["p10", "10th", "10th percentile", "Only 1 member in 10 has less than this"],
   ["p25", "25th", "25th percentile", "A quarter of the members have less"],
-  ["p50", "Median", "Median", "Half the members have more, half less"],
+  ["p50", "50th", "50th percentile", "Half the members have more, half less (the median)"],
   ["mean", "Mean", "Mean", "The average of the members. Smooth, but it understates heavy amounts where members disagree about where the snow falls"],
   ["p75", "75th", "75th percentile", "A quarter of the members have more"],
   ["p90", "90th", "90th percentile", "Only 1 member in 10 has more than this"],
@@ -43,7 +44,7 @@ function readHash() {
   return o;
 }
 function writeHash() {
-  const c = map.getCenter(), p = new URLSearchParams({ e: S.ens, m: S.method, p: S.prod, s: S.stat, c: S.cons, k: S.thr, w: S.win, t: S.t, pt: S.pt.map(v => v.toFixed(3)).join(","), v: `${c.lat.toFixed(3)},${c.lng.toFixed(3)},${map.getZoom()}`, l: [...S.layers].join("."), ta: S.terrain ? 1 : 0, tk: S.tk });
+  const c = map.getCenter(), p = new URLSearchParams({ e: S.ens, m: S.method, p: S.prod, s: S.stat, c: S.cons, k: S.thr, w: S.win, t: S.t, pt: S.pt.map(v => v.toFixed(3)).join(","), v: `${c.lat.toFixed(3)},${c.lng.toFixed(3)},${map.getZoom()}`, l: [...S.layers].join("."), ta: S.terrain ? 1 : 0, tk: S.tk, ...(S.ptName ? { pn: S.ptName } : {}) });
   history.replaceState(null, "", "#" + p);
 }
 
@@ -215,12 +216,12 @@ function togglePlay(on = !playing) {
 
 // ---------- point, chart, readout ----------
 let marker;
-function setPoint(lat, lon) {
-  S.pt = [lat, lon];
+function setPoint(lat, lon, name = null) {
+  S.pt = [lat, lon]; S.ptName = name;
   if (!marker) marker = L.circleMarker(S.pt, { radius: 6, weight: 2.5, color: "#fff", fillColor: "#0b0b0b", fillOpacity: 1, pane: "markerPane", interactive: false }).addTo(map);
   else marker.setLatLng(S.pt);
   const np = nearestPlace(places, lat, lon);
-  $("where").textContent = np ? `Near ${np.name}, ${np.st}` : "Chosen point";
+  $("where").textContent = name || (np ? `Near ${np.name}, ${np.st}` : "Chosen point");
   $("where-sub").textContent = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"}  ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}  ·  ${matchMedia("(pointer: coarse)").matches ? "tap" : "click"} the map to move`;
   if (bundle) { updateChart(); writeHash(); }
 }
@@ -249,7 +250,7 @@ function showReadout(lat, lon) {
   const kids = [big];
   if (S.prod !== "slr") {
     const ser = series(bundle, GRID, lat, lon, winIndex()), t = S.t, pf = pointFactor(lat, lon);
-    kids.push(el("div", { className: "trio" }, ...[["10th", "p10"], ["Median", "p50"], ["90th", "p90"]].map(([n, k]) => el("span", {}, n + " ", el("b", {}, fmt(ser[k][t] * pf))))));
+    kids.push(el("div", { className: "trio" }, ...[["10th", "p10"], ["50th", "p50"], ["90th", "p90"]].map(([n, k]) => el("span", {}, n + " ", el("b", {}, fmt(ser[k][t] * pf))))));
     kids.push(el("div", { className: "sub" }, `Snow range, ${winText(activeWin())}`));
   }
   box.replaceChildren(...kids);
@@ -347,7 +348,7 @@ function runline() {
 function credits() {
   const p = $("credits"); p.replaceChildren();
   for (const k of ["eps", "gefs", "geps"]) { const e = M.ensembles[k]; p.append(el("a", { href: e.url, target: "_blank", rel: "noopener" }, e.short), ` ${e.center}, ${e.license}. `); }
-  p.append("Basemap: Natural Earth (public domain). Places and peaks: GeoNames (CC BY 4.0). Ratios computed on a 0.25° grid, so terrain is smoothed.");
+  p.append("Basemap: Natural Earth (public domain). Places and peaks: GeoNames (CC BY 4.0), with further town names from public ZIP-code data. Ratios computed on a 0.25° grid, so terrain is smoothed.");
 }
 
 function setTheme(dark) {
@@ -356,6 +357,16 @@ function setTheme(dark) {
   try { localStorage.setItem("ensnow-theme", dark ? "dark" : "light"); } catch {}
   if (gis) { gis.restyle(); }
   if (bundle) { paint(); chart.draw(); }
+}
+
+// A town picked from the search box: the chosen point moves there and the map follows; the chart and readout then read the ensemble values at that point.
+function goToPlace(p) {
+  const [name, st, lat, lon] = p;
+  S.hover = null;
+  setPoint(lat, lon, `${name}, ${st}`);
+  map.setView([lat, lon], Math.max(map.getZoom(), 9));
+  updateReadoutAtPoint();
+  $("search").blur();
 }
 
 // ---------- start ----------
@@ -376,6 +387,7 @@ async function start() {
   if (h.t !== undefined && +h.t >= 0 && +h.t < E().fhrs.length) S.t = +h.t;
   else S.t = Math.max(0, E().fhrs.indexOf(E().fhrs.find(f => f >= 48) ?? E().fhrs.at(-1)));
   S.t = snapTime(S.t);
+  if (h.pn) S.ptName = h.pn.slice(0, 60);
   if (h.pt) { const q = h.pt.split(",").map(Number); if (q.length === 2 && q.every(Number.isFinite)) S.pt = q; }
   if (h.ta === "1" && M.terrain) S.terrain = true;
   if (h.tk !== undefined && +h.tk >= 0 && +h.tk <= 15) S.tk = +h.tk;
@@ -398,9 +410,10 @@ async function start() {
   chart = new FanChart($("chart"), $("chart-tip"), i => { togglePlay(false); setTime(validIdx()[i]); });
 
   buildControls(); buildTime(); ensNote(); runline();
-  gis.get("places").then(p => { places = p; setPoint(...S.pt); }).catch(() => {});
+  gis.get("places").then(p => { places = p; setPoint(...S.pt, S.ptName); }).catch(() => {});
   for (const [id] of LAYERS) if (S.layers.has(id)) gis.set(id, true).catch(console.error);
-  setPoint(...S.pt);
+  setPoint(...S.pt, S.ptName);
+  initSearch({ input: $("search"), list: $("search-list"), getPlaces: () => places, onPick: goToPlace });
   map.on("click", e => { setPoint(e.latlng.lat, e.latlng.lng); });
   map.on("mousemove", e => { S.hover = [e.latlng.lat, e.latlng.lng]; if (bundle) showReadout(...S.hover); });
   map.on("mouseout", () => { S.hover = null; if (bundle) showReadout(...S.pt); });

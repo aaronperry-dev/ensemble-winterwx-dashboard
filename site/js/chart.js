@@ -48,12 +48,19 @@ export class FanChart {
   showTip(e) {
     const d = this.data, i = this.hover;
     if (!d || i < 0) { this.tip.hidden = true; return; }
-    const s = d.series, rows = [["Max", s.max], ["95th", s.p95], ["90th", s.p90], ["Median", s.p50], ["Mean", s.mean], ["10th", s.p10], ["5th", s.p5], ["Min", s.min]];
-    this.tip.innerHTML = `<div class="th">${stamp(d.times[i])}</div>` + rows.map(([n, a]) => `<div class="row"><span>${n}</span><b>${fmt(a[i])} in</b></div>`).join("");
+    const s = d.series, rows = [["Max", s.max], ["95th", s.p95], ["90th", s.p90], ["50th", s.p50], ["Mean", s.mean], ["10th", s.p10], ["5th", s.p5], ["Min", s.min]];
+    const head = `<div class="th">${stamp(d.times[i])}</div>`, cells = rows.map(([n, a]) => `<div class="row"><span>${n}</span><b>${fmt(a[i])} in</b></div>`).join("");
+    const g = this.geom();
     this.tip.hidden = false;
-    const g = this.geom(), x = this.xOf(i, g), tw = this.tip.offsetWidth;
+    // the list is split into as many columns as it takes to fit inside the chart's height
+    for (let cols = 1; cols <= 4; cols++) {
+      this.tip.style.setProperty("--rows", Math.ceil(rows.length / cols));
+      this.tip.innerHTML = head + `<div class="grid">${cells}</div>`;
+      if (this.tip.offsetHeight <= g.h - 6) break;
+    }
+    const x = this.xOf(i, g), tw = this.tip.offsetWidth, th = this.tip.offsetHeight;
     this.tip.style.left = Math.max(4, Math.min(g.w - tw - 4, x + 12 > g.w - tw ? x - tw - 12 : x + 12)) + "px";
-    this.tip.style.top = "6px";
+    this.tip.style.top = Math.max(2, Math.min(6, g.h - th - 2)) + "px";
   }
 
   draw() {
@@ -71,7 +78,7 @@ export class FanChart {
     const lineKey = (col, w, dash) => (x0, y0) => { c.strokeStyle = col; c.lineWidth = w; c.setLineDash(dash || []); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + sw, y0); c.stroke(); c.setLineDash([]); };
     const boxKey = v => (x0, y0) => { c.fillStyle = css(v); c.fillRect(x0, y0 - 5, sw, 10); };
     const title = g.narrow ? d.label.replace(/^(\d+)-hour snow ending at each time/, "$1-h snow").replace(/^Snow since the run began/, "Total snow") : d.label;
-    const keys = [[null, title], [lineKey(accent0, 2.25), "Median"], [lineKey(ink20, 1.5, [5, 3]), "Mean"], [lineKey(ink30, 1.25, [2, 3]), "Max"],
+    const keys = [[null, title], [lineKey(accent0, 2.25), "50th percentile"], [lineKey(ink20, 1.5, [5, 3]), "Mean"], [lineKey(ink30, 1.25, [2, 3]), "Max"],
                   [boxKey("--band-b"), "25–75%"], [boxKey("--band-a"), "10–90%"], [boxKey("--band-c"), "5–95%"]];
     const rowH = g.narrow ? 15 : 0, place = [];
     let lx0 = g.l, row = 0;
@@ -135,7 +142,7 @@ export class FanChart {
 }
 
 export function tableHtml(d) {
-  const s = d.series, cols = [["Min", "min"], ["5th", "p5"], ["10th", "p10"], ["25th", "p25"], ["Median", "p50"], ["Mean", "mean"], ["75th", "p75"], ["90th", "p90"], ["95th", "p95"], ["Max", "max"], ["PMM", "pmm"], ["LPMM", "lpmm"], ["SAM", "sam"], ["SAM–LPM", "samlpm"]];
+  const s = d.series, cols = [["Min", "min"], ["5th", "p5"], ["10th", "p10"], ["25th", "p25"], ["50th", "p50"], ["Mean", "mean"], ["75th", "p75"], ["90th", "p90"], ["95th", "p95"], ["Max", "max"], ["PMM", "pmm"], ["LPMM", "lpmm"], ["SAM", "sam"], ["SAM–LPM", "samlpm"]];
   let h = `<table><caption class="sr">${d.label}, inches, at the chosen point</caption><thead><tr><th scope="col">Valid time</th>${cols.map(c => `<th scope="col">${c[0]}</th>`).join("")}</tr></thead><tbody>`;
   for (let i = 0; i < d.times.length; i++) h += `<tr><th scope="row">${stamp(d.times[i])}</th>${cols.map(c => `<td>${fmt(s[c[1]][i])}</td>`).join("")}</tr>`;
   return h + "</tbody></table>";
