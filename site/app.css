@@ -11,8 +11,8 @@
   --accent: #2a78d6;  --accent-ink: #1c5cab;  --accent-wash: #e7f0fc;
   --focus: #2a78d6;
   --land: #f1f0ea;  --water: #dde4e8;  --coast: #a9aeb0;
-  --county: rgba(82,81,78,.28);  --state: #6b6a65;
-  --road-i: #7a4a1a;  --road-us: #a98a5f;  --road-casing: rgba(252,252,251,.85);
+  --county: rgba(40,40,36,.55);  --state: #2a2a27;  --coast-line: #2f3a40;  --line-case: rgba(255,255,255,.9);
+  --road-i: #1b1b19;  --road-us: #3c3c38;  --road-st: #5d5d57;  --road-casing: rgba(255,255,255,.92);
   --label: #2b2a28;  --label-halo: rgba(252,252,251,.9);
   --band-c: rgba(42,120,214,.09);  --band-a: rgba(42,120,214,.16);  --band-b: rgba(42,120,214,.32);
   --shadow: 0 1px 2px rgba(11,11,11,.12);
@@ -25,8 +25,8 @@
   --accent: #3987e5;  --accent-ink: #86b6ef;  --accent-wash: #1d2a3a;
   --focus: #6da7ec;
   --land: #232321;  --water: #151819;  --coast: #4a4d4e;
-  --county: rgba(195,194,183,.20);  --state: #8c8b84;
-  --road-i: #d9a566;  --road-us: #9a8561;  --road-casing: rgba(13,13,13,.8);
+  --county: rgba(235,234,224,.55);  --state: #ecebe2;  --coast-line: #c9d3d8;  --line-case: rgba(0,0,0,.8);
+  --road-i: #f6f5ee;  --road-us: #d9d8cf;  --road-st: #b3b2a8;  --road-casing: rgba(0,0,0,.85);
   --label: #e4e3dd;  --label-halo: rgba(13,13,13,.85);
   --band-c: rgba(57,135,229,.11);  --band-a: rgba(57,135,229,.20);  --band-b: rgba(57,135,229,.38);
   --shadow: 0 1px 2px rgba(0,0,0,.5);
@@ -40,8 +40,8 @@
     --accent: #3987e5;  --accent-ink: #86b6ef;  --accent-wash: #1d2a3a;
     --focus: #6da7ec;
     --land: #232321;  --water: #151819;  --coast: #4a4d4e;
-    --county: rgba(195,194,183,.20);  --state: #8c8b84;
-    --road-i: #d9a566;  --road-us: #9a8561;  --road-casing: rgba(13,13,13,.8);
+    --county: rgba(235,234,224,.55);  --state: #ecebe2;  --coast-line: #c9d3d8;  --line-case: rgba(0,0,0,.8);
+    --road-i: #f6f5ee;  --road-us: #d9d8cf;  --road-st: #b3b2a8;  --road-casing: rgba(0,0,0,.85);
     --label: #e4e3dd;  --label-halo: rgba(13,13,13,.85);
     --band-c: rgba(57,135,229,.11);  --band-a: rgba(57,135,229,.20);  --band-b: rgba(57,135,229,.38);
     --shadow: 0 1px 2px rgba(0,0,0,.5);
@@ -178,8 +178,8 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
 .lbl.city { font-weight: 600; font-size: 13px; }
 .lbl.peak i { border-radius: 0; background: none; width: 0; height: 0; border-left: 4.5px solid transparent; border-right: 4.5px solid transparent; border-bottom: 8px solid #8a5a2b; box-shadow: none; margin-right: 3px; }
 .lbl.ski i { border-radius: 1px; transform: rotate(45deg); background: #2a78d6; width: 7px; height: 7px; margin-right: 5px; }
-.lbl.route { transform: translate(-50%, -50%); font-size: 11px; font-weight: 700; padding: 0 4px; border-radius: 3px; background: var(--surface); border: 1px solid var(--ink-3); text-shadow: none; }
-.lbl.route.i { border-color: var(--road-i); }
+.lbl.shield { transform: translate(-50%, -50%); line-height: 0; text-shadow: none; }
+.lbl.shield svg { display: block; overflow: visible; }
 .lbl-layer { position: absolute; left: 0; top: 0; pointer-events: none; }
 
 /* ---- narrow screens (tablets in portrait, phones): the controls become a bottom sheet over the map, the slider gets a full-width row ---- */
