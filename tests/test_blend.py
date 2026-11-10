@@ -25,6 +25,10 @@ class Degraded(syn.SyntheticSource):
         for st in ens.steps:
             if st.fhr in p.get("blank", ()):
                 continue
+            if "scale" in p and st.precip_cum_mm is not None:         # a system that forecasts much more (or less) than the others
+                st.precip_cum_mm = st.precip_cum_mm * p["scale"]
+                if st.snow_liq_cum_mm is not None:
+                    st.snow_liq_cum_mm = st.snow_liq_cum_mm * p["scale"]
             if st.fhr in p.get("drop", ()):
                 st.precip_cum_mm = None
                 st.snow_liq_cum_mm = None
@@ -66,17 +70,33 @@ def test_one_system_fails_the_others_are_still_blended(tmp_path, degrade):
     assert set(a["contrib"]) == {"eps,geps"}
 
 
-def test_missing_hours_are_pooled_from_the_systems_that_have_them(tmp_path, degrade):
+def test_missing_hours_are_filled_in_and_the_totals_never_fall(tmp_path, degrade):
     degrade({"eps": {"drop": {6, 9}}, "geps": {"blank": {9}}})
     man = run(tmp_path, ["eps", "gefs", "geps"])
     assert 6 not in man["ensembles"]["eps"]["fhrs"] and 9 not in man["ensembles"]["eps"]["fhrs"]
     assert 9 not in man["ensembles"]["geps"]["fhrs"]
     a = man["ensembles"]["all"]
     assert a["fhrs"] == [3, 6, 9, 12]                                      # every hour any system has
-    assert dict(zip(a["fhrs"], a["contrib"])) == {3: "eps,gefs,geps", 6: "gefs,geps", 9: "gefs", 12: "eps,gefs,geps"}
-    p50 = blend_p50(tmp_path, man, "all")
-    assert np.isfinite(p50).all(axis=(1, 2)).all()                          # a pooled value at every hour, including the one only GEFS has
-    assert (np.diff(np.nan_to_num(p50), axis=0) >= -0.06).all()
+    assert dict(zip(a["fhrs"], a["contrib"])) == {3: "eps,gefs,geps", 6: "gefs,geps", 9: "gefs", 12: "eps,gefs,geps"}    # which have data of their own
+    assert dict(zip(a["fhrs"], a["filled"])) == {3: "", 6: "eps", 9: "eps,geps", 12: ""}                                  # and which are filled in
+    _, blocks = encode.read_bundle(tmp_path / "data" / a["files"]["blend"]["file"])
+    amt = blocks["amt"][man["windows"].index(0)]                            # run total
+    for stat in ("mean", "p50", "p90", "max"):
+        v = np.nan_to_num(amt[man["stats"].index(stat)])
+        assert (np.diff(v, axis=0) >= -0.06).all(), stat                    # a running total never falls from one hour to the next
+
+
+def test_totals_do_not_zigzag_when_one_system_has_every_other_hour(tmp_path, degrade):
+    """The bug seen on the page: a system present at some hours and absent at others made the pooled totals rise and fall."""
+    degrade({"eps": {"drop": {3, 9, 15}, "scale": 3.0}})
+    man = run(tmp_path, ["eps", "gefs"], max_fhr=18)
+    a = man["ensembles"]["all"]
+    assert a["fhrs"] == [3, 6, 9, 12, 15, 18]
+    _, blocks = encode.read_bundle(tmp_path / "data" / a["files"]["blend"]["file"])
+    amt = blocks["amt"][man["windows"].index(0)]
+    for stat in ("mean", "p50", "p75", "max"):
+        v = np.nan_to_num(amt[man["stats"].index(stat)])
+        assert (np.diff(v, axis=0) >= -0.06).all(), stat
 
 
 def test_members_missing_at_one_hour_do_not_poison_later_hours(tmp_path, degrade):
@@ -107,9 +127,8 @@ def test_older_run_is_lined_up_by_valid_time(tmp_path):
         kept[key] = (ens, compute.compute_snowfall(ens, LAT, LON))
     (tmp_path / "data").mkdir()
     a = build.combine(kept, tmp_path)
-    assert a["init"] == "2026-11-09T12:00:00Z" and a["fhrs"][0] == 3 and a["fhrs"][-1] == 36
-    contrib = dict(zip(a["fhrs"], a["contrib"]))
-    assert contrib[3] == contrib[24] == "eps,geps" and contrib[27] == contrib[36] == "geps"      # the older EPS run ends at F+24 of the newest
+    assert a["init"] == "2026-11-09T12:00:00Z" and a["fhrs"][0] == 3 and a["fhrs"][-1] == 24     # the older EPS run ends at F+24 of the newest
+    assert set(a["contrib"]) == {"eps,geps"} and any("ends at F+24 h" in n for n in a["notes"])  # the pool stops there rather than lose a system
     assert any("12 h before the newest" in n for n in a["notes"])
     assert [s["init"] for s in a["systems"]] == ["2026-11-09T00:00:00Z", "2026-11-09T12:00:00Z"]
     # the older system's totals count from the newest run's start: the snowiest member at F+3 is the larger of EPS (F+15 minus F+12 of its run) and GEPS
@@ -119,7 +138,7 @@ def test_older_run_is_lined_up_by_valid_time(tmp_path):
     _, blocks = encode.read_bundle(tmp_path / "data" / a["files"]["blend"]["file"])
     mx = blocks["amt"][config.WINDOWS_H.index(0)][list(config.ALL_STATS).index("max")]
     assert np.abs(mx[0] - want).max() < 0.06
-    assert np.isfinite(mx[:8]).all()
+    assert np.isfinite(mx).all() and (np.diff(mx, axis=0) >= -0.06).all()
 
 
 def test_a_run_too_old_is_left_out_not_fatal(tmp_path):
