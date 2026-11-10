@@ -281,13 +281,7 @@ function showReadout(lat, lon) {
   setPrecise(qpf());
   const unit = S.prod === "prob" ? "%" : S.prod === "slr" ? ":1" : "in";
   const big = el("div", { className: "big" }, S.prod === "slr" ? v.toFixed(1) : fmt(v), el("small", {}, unit));
-  const kids = [big];
-  if (S.prod !== "slr") {
-    const ser = series(bundle, GRID, lat, lon, winIndex()), t = S.t, pf = pointFactor(lat, lon);
-    kids.push(el("div", { className: "trio" }, ...[["10th", "p10"], ["50th", "p50"], ["90th", "p90"]].map(([n, k]) => el("span", {}, n + " ", el("b", {}, fmt(ser[k][t] * pf))))));
-    kids.push(el("div", { className: "sub" }, `${qpf() ? "Liquid range" : "Snow range"}, ${winText(activeWin())}`));
-  }
-  box.replaceChildren(...kids);
+  box.replaceChildren(big);
   placeReadout();
 }
 // The readout sits beside the pointer (or the last tap), flipping to the other side where it would leave the map, and stays with its spot on the map as the map moves.

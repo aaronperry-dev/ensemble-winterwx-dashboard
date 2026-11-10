@@ -133,13 +133,10 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
 .legend .ticks span + span { margin-left: 2px; }
 
 /* The readout follows the pointer (a tap, on a touch screen); main.js moves it with transform.  Its fill is slightly see-through so the field shows faintly behind it. */
-.readout { position: absolute; left: 0; top: 0; z-index: 800; background: var(--readout-bg); -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); border-radius: 8px; will-change: transform; padding: 8px 11px; box-shadow: var(--shadow); min-width: 170px; pointer-events: none; font-variant-numeric: tabular-nums; }
+.readout { position: absolute; left: 0; top: 0; z-index: 800; background: var(--readout-bg); -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); border-radius: 8px; will-change: transform; padding: 8px 11px; box-shadow: var(--shadow); min-width: 0; pointer-events: none; font-variant-numeric: tabular-nums; }
 .readout:empty { display: none; }
 .readout .big { font-size: 22px; font-weight: 700; line-height: 1.15; }
 .readout .big small { font-size: 13px; font-weight: 400; color: var(--ink-2); margin-left: 4px; }
-.readout .sub { color: var(--ink-2); font-size: 13px; }
-.readout .trio { display: flex; gap: 10px; margin-top: 4px; font-size: 13px; }
-.readout .trio span b { font-weight: 600; }
 .loading { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 900; background: var(--surface); padding: 5px 14px; border-radius: 999px; box-shadow: var(--shadow); color: var(--ink-2); }
 
 .dock { grid-area: dock; background: var(--surface); border-top: 1px solid var(--hair); display: flex; flex-direction: column; min-width: 0; }
@@ -227,8 +224,6 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
   .legend .ticks span:first-child { transform: none; }
   .readout { min-width: 0; padding: 6px 10px; max-width: calc(100% - 64px); }
   .readout .big { font-size: 19px; }
-  .readout .trio { gap: 8px; font-size: 12.5px; margin-top: 2px; }
-  .readout .sub { display: none; }
 }
 @media (pointer: coarse) {
   .ghost { padding: 8px 14px; }
