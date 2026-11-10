@@ -44,24 +44,40 @@ def candidate_cycles(now: datetime, hours: tuple[int, ...], n: int = 8) -> list[
 
 
 def pick_cycles(sources: dict, now: datetime, max_fhr: int, common: bool = True, force: datetime | None = None) -> dict[str, datetime]:
+    """The run each system is built from.  A system with no complete run at all is left out (the others carry on); when the systems cannot share
+    one initialisation time each uses its own newest complete run and the combined view lines them up by valid time."""
     if force is not None:
         return {k: force for k in sources}
     per = {k: candidate_cycles(now, config.ENSEMBLES[k].cycles) for k in sources}
-    if common and len(sources) > 1:
-        shared = sorted(set.intersection(*[set(v) for v in per.values()]), reverse=True)
-        for t in shared[:6]:
-            if all(src.is_complete(t, max_fhr) for src in sources.values()):
-                return {k: t for k in sources}
-        log.warning("no cycle is complete for every system; using each system's own newest run")
-    out = {}
-    for k, src in sources.items():
+    memo: dict[tuple[str, datetime], bool] = {}
+
+    def complete(k, t):
+        if (k, t) not in memo:
+            try:
+                memo[k, t] = bool(sources[k].is_complete(t, max_fhr))
+            except Exception as exc:                          # a server that cannot be reached counts as "not there yet"
+                log.warning("%s: could not check the run of %s (%s)", k, t, exc)
+                memo[k, t] = False
+        return memo[k, t]
+
+    own: dict[str, datetime] = {}
+    for k in sources:
         for t in per[k]:
-            if src.is_complete(t, max_fhr):
-                out[k] = t
+            if complete(k, t):
+                own[k] = t
                 break
         else:
-            log.error("%s: no complete run found in the last %d cycles", k, len(per[k]))
-    return out
+            log.error("%s: no complete run found in the last %d cycles; it is left out", k, len(per[k]))
+    if common and len(own) > 1:
+        shared = sorted(set.intersection(*[set(per[k]) for k in own]), reverse=True)
+        newest = max(own.values())
+        for t in shared[:6]:
+            if all(complete(k, t) for k in own):
+                if newest - t <= timedelta(hours=12):
+                    return {k: t for k in own}
+                break
+        log.warning("no recent run is complete for every system; each system's own newest run is used and the combined view lines them up by valid time")
+    return own
 
 
 # --------------------------------------------------------------------------- statistics -> bundle
@@ -215,36 +231,90 @@ def process_ensemble(ens: EnsembleData, out: Path, grid_lat, grid_lon, keep: dic
             "window_times": window_times(res.fhrs)}
 
 
+def _aligned(ens, res, ref_init: datetime):
+    """How one system's run lines up with the newest run: ``(lag in hours, {hour since ref_init: index into res.fhrs})``, or None when it cannot be used.
+
+    A run older than the reference is moved by its age; its cumulative totals are then reduced by what had fallen by ``ref_init`` (in :func:`combine`)."""
+    lag = int(round((ref_init - ens.cycle).total_seconds() / 3600))
+    if lag < 0:
+        return None
+    if lag > config.BLEND_MAX_LAG_H:
+        log.warning("%s: its run is %d h older than the newest, more than %d h: left out of the combined view", ens.key, lag, config.BLEND_MAX_LAG_H)
+        return None
+    if lag and lag not in res.fhrs:
+        log.warning("%s: no output at the reference time (F+%d h of its run): left out of the combined view", ens.key, lag)
+        return None
+    at = {f - lag: i for i, f in enumerate(res.fhrs) if f - lag > 0}
+    return lag, at
+
+
 def combine(kept: dict, out: Path) -> dict | None:
-    """Pool systems that share an initialisation time into one ensemble in which every system carries equal total weight."""
-    systems = [k for k in kept if True]
+    """Pool the systems into one ensemble in which every system present at a time carries equal total weight.
+
+    Whatever is available is used, at each forecast hour separately: a system that lacks an hour (or a method, or has an older run) is simply
+    absent from that hour's pool, and the others are pooled as they are.  The members of an absent system are NaN there, which every statistic
+    leaves out per cell while the remaining systems keep their equal weights.  Systems with runs of different ages are lined up by valid time."""
+    systems = list(kept)
     if len(systems) < 2:
         return None
-    inits = {kept[k][0].cycle for k in systems}
-    if len(inits) != 1:
-        log.info("combined view skipped: systems have different initialisation times")
+    ref = max(kept[k][0].cycle for k in systems)
+    align = {}
+    for k in systems:
+        a = _aligned(kept[k][0], kept[k][1], ref)
+        if a is not None:
+            align[k] = a
+    systems = [k for k in systems if k in align]
+    if len(systems) < 2:
+        log.info("combined view skipped: fewer than two systems can be lined up")
         return None
-    fhrs = sorted(set.intersection(*[set(kept[k][1].fhrs) for k in systems]))
-    methods = [m for m in ["blend"] + list(slr.METHODS) if all(m in kept[k][1].methods for k in systems)]
-    idx = {k: [kept[k][1].fhrs.index(f) for f in fhrs] for k in systems}
-    weights = np.concatenate([np.full(len(kept[k][0].members), 1.0 / len(kept[k][0].members)) for k in systems])
-    files = {}
-    init = next(iter(inits)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    pooled = {m: np.concatenate([kept[k][1].methods[m][idx[k]] for k in systems], axis=1) for m in methods}
+    fhrs = sorted(set().union(*[set(align[k][1]) for k in systems]))
+    if not fhrs:
+        return None
+    pos = {f: i for i, f in enumerate(fhrs)}
+    methods = [m for m in ["blend"] + list(slr.METHODS) if any(m in kept[k][1].methods for k in systems)]
+    sizes = {k: len(kept[k][0].members) for k in systems}
+    total = sum(sizes.values())
+    start = dict(zip(systems, np.cumsum([0] + [sizes[k] for k in systems[:-1]])))
+    ny, nx = kept[systems[0]][1].liquid_in.shape[2:]
+
+    def pool(get):
+        arr = np.full((len(fhrs), total, ny, nx), np.nan, np.float32)
+        for k in systems:
+            lag, at = align[k]
+            src = get(kept[k][1])
+            if src is None:
+                continue
+            base = src[kept[k][1].fhrs.index(lag)] if lag else 0.0
+            for f, i in at.items():
+                arr[pos[f], start[k]:start[k] + sizes[k]] = src[i] - base
+        return arr
+
+    pooled = {m: pool(lambda r, m=m: r.methods.get(m)) for m in methods}
+    liq = pool(lambda r: r.liquid_in)
+    weights = np.concatenate([np.full(sizes[k], 1.0 / sizes[k]) for k in systems])
     t0 = time.time()
     shifts = compute_shifts(pooled["blend"], fhrs, weights)
     log.info("all: spatial alignment of the members done in %.0f s", time.time() - t0)
-    liq = np.concatenate([kept[k][1].liquid_in[idx[k]] for k in systems], axis=1)
+    init = ref.strftime("%Y-%m-%dT%H:%M:%SZ")
     names = {m: f"all_{m}.bin.gz" for m in methods}
-    sizes = write_bundles(out / "data", names, pooled, liq, fhrs, {m: bundle_meta("all", m, init, fhrs) for m in methods}, weights, shifts)
-    for m in methods:
-        files[m] = {"file": names[m], "bytes": sizes[m]}
-    total = sum(len(kept[k][0].members) for k in systems)
-    return {"label": "All systems combined", "short": "All", "center": "ECMWF + NOAA + ECCC",
-            "native": f"{total} members; each system carries equal weight", "license": "see each system", "url": "",
-            "init": next(iter(inits)).strftime("%Y-%m-%dT%H:%M:%SZ"), "members": total, "fhrs": fhrs, "methods": methods, "blend_members": [],
-            "ptype": "per system", "notes": ["Systems are pooled with equal total weight (a GEPS member counts for more than an EPS member)."], "files": files,
-            "window_times": window_times(fhrs)}
+    written = write_bundles(out / "data", names, pooled, liq, fhrs, {m: bundle_meta("all", m, init, fhrs) for m in methods}, weights, shifts)
+    files = {m: {"file": names[m], "bytes": written[m]} for m in methods}
+    contrib = [",".join(k for k in systems if f in align[k][1]) for f in fhrs]
+    shorts = " + ".join(config.ENSEMBLES[k].short for k in systems)
+    notes = ["Whatever is available at each forecast hour is pooled, each system with equal total weight (a GEPS member counts for more than an EPS member)."]
+    for k in systems:
+        lag = align[k][0]
+        if lag:
+            notes.append(f"{config.ENSEMBLES[k].short} is from the run {lag} h before the newest; it is lined up by valid time and its snow is counted from the newest run's start.")
+    for k in kept:
+        if k not in systems:
+            notes.append(f"{config.ENSEMBLES[k].short} is not in the combined view (its run is too old to line up).")
+    return {"label": "All systems combined", "short": "All", "center": " + ".join({"eps": "ECMWF", "gefs": "NOAA", "geps": "ECCC"}[k] for k in systems),
+            "native": f"{total} members ({shorts}); each system carries equal weight", "license": "see each system", "url": "",
+            "init": init, "members": total, "fhrs": fhrs, "methods": methods, "blend_members": [],
+            "ptype": "per system", "notes": notes, "files": files, "window_times": window_times(fhrs),
+            "systems": [{"key": k, "short": config.ENSEMBLES[k].short, "init": kept[k][0].cycle.strftime("%Y-%m-%dT%H:%M:%SZ"), "members": sizes[k]} for k in systems],
+            "contrib": contrib}
 
 
 # --------------------------------------------------------------------------- site

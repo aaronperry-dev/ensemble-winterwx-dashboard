@@ -37,6 +37,9 @@ DEFAULT_MAX_FHR = 168           # 7 days.  Beyond that the member spread is so w
 # Accumulation periods in hours.  0 = run total (since initialisation).  A window is only shown at times when it is complete (a 24-hour total
 # first exists at F+24 h) and when both of its end points are output hours (a 3-hour total does not exist after F+144 h for ECMWF).
 WINDOWS_H = (3, 6, 12, 24, 48, 0)
+# The combined view pools whichever systems have data at each time.  A system whose run is older than the newest one is lined up by valid time;
+# it is left out of the pool when it is more than this many hours older than the newest run.
+BLEND_MAX_LAG_H = 24
 EPS_PL_STEP_H = 6               # ECMWF upper-air fields (the bulk of the download) are fetched every 6 h; odd 3-hourly steps interpolate between them
 
 # --------------------------------------------------------------------------- statistics shipped to the browser

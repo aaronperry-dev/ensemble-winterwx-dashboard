@@ -64,20 +64,36 @@ def compute_snowfall(ens: EnsembleData, lat: np.ndarray, lon: np.ndarray, method
     out_fhrs, out_liq = [], []
     out_cum: dict[str, list] = {k: [] for k in cum}
 
+    skipped: list[int] = []
     for st in steps:
         if st.fhr == 0:
             continue
         dt = st.fhr - prev_fhr
-        if st.precip_cum_mm is None:
-            raise ValueError(f"hour {st.fhr}: no precipitation")
-        d_mm = np.clip(st.precip_cum_mm - prev_precip, 0.0, None)
+        pc = st.precip_cum_mm
+        if pc is None or not np.isfinite(pc).any():                # nothing for this hour (a file that did not download): the next hour covers the gap
+            skipped.append(st.fhr)
+            continue
+        # members with no data at all this hour (a missing file for them): their interval is carried to the next hour, and they are blank here
+        gone = ~np.isfinite(pc).any(axis=(1, 2))
+        if gone.any():
+            pc = np.where(gone[:, None, None], prev_precip, pc)
+        d_mm = np.clip(pc - prev_precip, 0.0, None)
         # --- snow-type liquid of the interval
-        if st.snow_liq_cum_mm is not None:
-            snow_mm = np.clip(st.snow_liq_cum_mm - prev_snow_liq, 0.0, None)
+        if st.snow_liq_cum_mm is not None and np.isfinite(st.snow_liq_cum_mm).any():
+            sl = st.snow_liq_cum_mm
+            if gone.any():
+                sl = np.where(gone[:, None, None], prev_snow_liq, sl)
+            new_snow_liq = sl
+            snow_mm = np.clip(sl - prev_snow_liq, 0.0, None)
             snow_mm = np.minimum(snow_mm, d_mm * 1.001 + 1e-6)
             source_used.add("native snow accumulation")
         else:
-            f1, src = _snow_fraction(st)
+            try:
+                f1, src = _snow_fraction(st)
+            except ValueError as exc:                              # no precipitation type and nothing to estimate it from at this hour
+                log.warning("%s: hour %d skipped (%s)", ens.key, st.fhr, exc)
+                skipped.append(st.fhr)
+                continue
             native = src == "native flag"
             try:                                       # the start of the interval, by the same method as its end
                 f0 = _snow_fraction(prev, native)[0] if prev is not None and (prev.snow_frac is not None if native else prev.t2m_k is not None) else f1
@@ -85,6 +101,7 @@ def compute_snowfall(ens: EnsembleData, lat: np.ndarray, lon: np.ndarray, method
                 f0 = f1
             snow_mm = d_mm * 0.5 * (f0 + f1)
             source_used.add(src)
+            new_snow_liq = prev_snow_liq
         snow_liq_in = snow_mm / MM_PER_IN
         cum_liq += snow_liq_in
 
@@ -108,14 +125,16 @@ def compute_snowfall(ens: EnsembleData, lat: np.ndarray, lon: np.ndarray, method
 
         if st.fhr % config.OUT_STEP_H == 0:
             out_fhrs.append(st.fhr)
-            out_liq.append(cum_liq.copy())
+            blank = gone[:, None, None]
+            out_liq.append(np.where(blank, np.nan, cum_liq).astype(np.float32))
             for k in cum:
-                out_cum[k].append(cum[k].copy())
-        prev, prev_fhr, prev_precip, prev_col = st, st.fhr, st.precip_cum_mm, col
-        prev_snow_liq = st.snow_liq_cum_mm if st.snow_liq_cum_mm is not None else prev_snow_liq
+                out_cum[k].append(np.where(blank, np.nan, cum[k]).astype(np.float32))
+        prev, prev_fhr, prev_precip, prev_col, prev_snow_liq = st, st.fhr, pc, col, new_snow_liq
 
     avail = avail or set()
     notes = list(ens.notes)
+    if skipped:
+        notes.append("No usable data for forecast hour(s) " + ", ".join(str(h) for h in skipped) + " of this system; the next available hour covers the gap")
     dropped = [k for k in methods if k not in avail]
     if dropped:
         notes.append("Not available for this system (missing inputs): " + ", ".join(methods[k].label for k in dropped))
