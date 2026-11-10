@@ -635,7 +635,6 @@ Chester,VT,43.2629,-72.5951,2994
 Coventry Lake,CT,41.7723,-72.3326,2990
 Calais,ME,45.1838,-67.2766,2980
 Madawaska,ME,47.3553,-68.3217,2967
-Madawaska,ME,46.8842,-67.9472,2967
 Sandwich,MA,41.759,-70.4939,2962
 Holden,ME,44.7529,-68.6789,2939
 Durham,CT,41.4818,-72.6812,2933
@@ -1108,3 +1107,909 @@ Guildhall,VT,44.5651,-71.5598,256
 Newfane,VT,42.9856,-72.6559,114
 North Haverhill,NH,44.0903,-72.0265,0
 Allenstown,NH,43.1567,-71.4048,0
+Abington,CT,41.8608,-72.0072,0
+Amston,CT,41.6288,-72.3731,0
+Andover,CT,41.7319,-72.3739,0
+Ashford,CT,41.8955,-72.1587,0
+Ballouville,CT,41.8767,-71.8618,0
+Bantam,CT,41.7227,-73.2576,0
+Beacon Falls,CT,41.4365,-73.0588,0
+Berlin,CT,41.6034,-72.7761,0
+Bethany,CT,41.4266,-72.9944,0
+Bethlehem,CT,41.6374,-73.2095,0
+Bolton,CT,41.7664,-72.4389,0
+Botsford,CT,41.3667,-73.2577,0
+Bozrah,CT,41.5472,-72.1775,0
+Bridgewater,CT,41.5167,-73.3578,0
+Broad Brook,CT,41.9077,-72.5517,0
+Brookfield,CT,41.4676,-73.3879,0
+Brooklyn,CT,41.7855,-71.9545,0
+Burlington,CT,41.7613,-72.9572,0
+Canterbury,CT,41.6975,-71.9884,0
+Canton,CT,41.8631,-72.9134,0
+Canton Center,CT,41.8743,-72.8993,0
+Centerbrook,CT,41.3489,-72.4132,0
+Central Village,CT,41.7322,-71.9057,0
+Chaplin,CT,41.7894,-72.1279,0
+Cobalt,CT,41.5636,-72.5568,0
+Colebrook,CT,42.0151,-73.1057,0
+Columbia,CT,41.691,-72.2978,0
+Cornwall,CT,41.8439,-73.3294,0
+Cornwall Bridge,CT,41.7871,-73.3575,0
+Coventry,CT,41.7771,-72.3353,0
+Dayville,CT,41.8533,-71.8643,0
+Derby,CT,41.3269,-73.0819,0
+East Berlin,CT,41.6159,-72.7204,0
+East Canaan,CT,42.0122,-73.285,0
+East Glastonbury,CT,41.6972,-72.5347,0
+East Granby,CT,41.9393,-72.7361,0
+East Hartland,CT,42.0043,-72.9149,0
+East Killingly,CT,41.8433,-71.8066,0
+East Lyme,CT,41.3765,-72.237,0
+East Windsor Hill,CT,41.8478,-72.5961,0
+East Woodstock,CT,41.9874,-71.9754,0
+Eastford,CT,41.893,-72.0985,0
+Essex,CT,41.3491,-72.4022,0
+Fabyan,CT,42.0137,-71.9406,0
+Falls Village,CT,41.947,-73.3088,0
+Gaylordsville,CT,41.6483,-73.4845,0
+Gilman,CT,41.5781,-72.1968,0
+Goshen,CT,41.8445,-73.2369,0
+Granby,CT,41.9601,-72.7993,0
+Greens Farms,CT,41.1229,-73.3159,0
+Grosvenor Dale,CT,41.9685,-71.8953,0
+Haddam,CT,41.4605,-72.5044,0
+Hadlyme,CT,41.4216,-72.4194,0
+Hampton,CT,41.7651,-72.0679,0
+Hanover,CT,41.6425,-72.0658,0
+Harwinton,CT,41.753,-73.0599,0
+Hawleyville,CT,41.4276,-73.3558,0
+Ivoryton,CT,41.3479,-72.4461,0
+Lakeside,CT,41.6772,-73.2431,0
+Lakeville,CT,41.9507,-73.4288,0
+Lebanon,CT,41.6266,-72.2458,0
+Mansfield Center,CT,41.7816,-72.2068,0
+Mansfield Depot,CT,41.8014,-72.3066,0
+Marion,CT,41.5625,-72.9343,0
+Marlborough,CT,41.6379,-72.4559,0
+Mashantucket,CT,41.4566,-71.9778,0
+Middle Haddam,CT,41.5568,-72.5548,0
+Middlefield,CT,41.5157,-72.7131,0
+Milldale,CT,41.5655,-72.8922,0
+Monroe,CT,41.3422,-73.2316,0
+Morris,CT,41.6903,-73.2084,0
+New Preston Marble Dale,CT,41.6923,-73.3342,0
+Norfolk,CT,41.9573,-73.201,0
+North Canton,CT,41.9601,-72.9435,0
+North Franklin,CT,41.6139,-72.149,0
+North Grosvenordale,CT,41.9786,-71.902,0
+North Stonington,CT,41.4684,-71.8796,0
+North Westchester,CT,41.5805,-72.4017,0
+North Windham,CT,41.7331,-72.1545,0
+Northfield,CT,41.7073,-73.1048,0
+Northford,CT,41.3764,-72.7692,0
+Oakdale,CT,41.4654,-72.1919,0
+Old Lyme,CT,41.3592,-72.3412,0
+Oneco,CT,41.6695,-71.8055,0
+Pequabuck,CT,41.6729,-72.9939,0
+Pine Meadow,CT,41.8757,-72.9667,0
+Plantsville,CT,41.5777,-72.9007,0
+Pomfret,CT,41.8975,-71.9631,0
+Pomfret Center,CT,41.858,-71.9951,0
+Poquonock,CT,41.9048,-72.6795,0
+Portland,CT,41.5984,-72.5891,0
+Preston,CT,41.5168,-71.9918,0
+Quaker Hill,CT,41.3989,-72.1314,0
+Redding,CT,41.3022,-73.388,0
+Redding Center,CT,41.3025,-73.3839,0
+Redding Ridge,CT,41.3136,-73.3505,0
+Riverton,CT,41.9762,-73.0073,0
+Rockfall,CT,41.5345,-72.6997,0
+Rocky Hill,CT,41.6564,-72.6699,0
+Rogers,CT,41.8404,-71.9064,0
+Roxbury,CT,41.5533,-73.2996,0
+Salisbury,CT,42.0082,-73.4159,0
+Sandy Hook,CT,41.405,-73.2493,0
+Scotland,CT,41.6954,-72.1017,0
+Sharon,CT,41.8556,-73.4342,0
+Somersville,CT,41.9828,-72.4884,0
+South Britain,CT,41.4705,-73.2517,0
+South Glastonbury,CT,41.6456,-72.5664,0
+South Kent,CT,41.7006,-73.4593,0
+South Lyme,CT,41.2948,-72.2564,0
+South Willington,CT,41.8564,-72.2998,0
+Staffordville,CT,41.9938,-72.2594,0
+Sterling,CT,41.7195,-71.8231,0
+Stevenson,CT,41.3833,-73.185,0
+Stonington,CT,41.3803,-71.916,0
+Storrs Mansfield,CT,41.7912,-72.2521,0
+Suffield,CT,41.9895,-72.654,0
+Taconic,CT,41.9834,-73.4219,0
+Taftville,CT,41.5628,-72.0546,0
+Unionville,CT,41.7469,-72.887,0
+Vernon Rockville,CT,41.8365,-72.4633,0
+Versailles,CT,41.6017,-72.0379,0
+Voluntown,CT,41.5777,-71.8358,0
+Washington Depot,CT,41.6503,-73.3167,0
+West Cornwall,CT,41.8647,-73.3354,0
+West Granby,CT,41.9574,-72.8653,0
+West Hartland,CT,42.0132,-72.9781,0
+West Mystic,CT,41.3544,-71.9669,0
+West Suffield,CT,41.9949,-72.7283,0
+Weston,CT,41.2226,-73.3767,0
+Willington,CT,41.8944,-72.2626,0
+Winchester Center,CT,41.9019,-73.136,0
+Woodstock,CT,41.9635,-72.0099,0
+Woodstock Valley,CT,41.9422,-72.0622,0
+Yantic,CT,41.5612,-72.1252,0
+Accord,MA,42.1747,-70.8845,0
+Allston,MA,42.3576,-71.1289,0
+Arlington Heights,MA,42.4288,-71.1494,0
+Ashley Falls,MA,42.0654,-73.3165,0
+Attleboro Falls,MA,41.9726,-71.3073,0
+Auburndale,MA,42.3451,-71.2472,0
+Babson Park,MA,42.2988,-71.2601,0
+Berkshire,MA,42.5035,-73.2021,0
+Blandford,MA,42.187,-72.9561,0
+Brant Rock,MA,42.0863,-70.6417,0
+Brighton,MA,42.3488,-71.1551,0
+Brookfield,MA,42.1945,-72.1038,0
+Brookline Village,MA,42.3336,-71.1237,0
+Bryantville,MA,42.0425,-70.8459,0
+Byfield,MA,42.7583,-70.9171,0
+Cataumet,MA,41.6668,-70.6176,0
+Charlestown,MA,42.3817,-71.0641,0
+Charlton City,MA,42.1476,-71.9982,0
+Charlton Depot,MA,42.1733,-71.9794,0
+Chartley,MA,41.9488,-71.2266,0
+Cherry Valley,MA,42.2352,-71.8769,0
+Cheshire,MA,42.5582,-73.1479,0
+Chester,MA,42.2686,-72.9808,0
+Chilmark,MA,41.3302,-70.7615,0
+Cummaquid,MA,41.6991,-70.2777,0
+Cummington,MA,42.441,-72.9156,0
+Cuttyhunk,MA,41.4657,-70.8129,0
+Dartmouth,MA,41.5766,-71.0106,0
+Deerfield,MA,42.54,-72.6184,0
+Dorchester,MA,42.3073,-71.0859,0
+Dorchester Center,MA,42.2849,-71.0698,0
+Drury,MA,42.6517,-72.9908,0
+East Boston,MA,42.3733,-71.0155,0
+East Freetown,MA,41.7526,-70.9815,0
+East Orleans,MA,41.7966,-69.9568,0
+East Otis,MA,42.192,-73.0453,0
+East Taunton,MA,41.8673,-71.0157,0
+East Templeton,MA,42.5651,-72.0316,0
+East Walpole,MA,42.1541,-71.215,0
+East Wareham,MA,41.7719,-70.6481,0
+East Weymouth,MA,42.2145,-70.9334,0
+Elmwood,MA,42.0154,-70.9646,0
+Fayville,MA,42.2915,-71.5002,0
+Feeding Hills,MA,42.0705,-72.6752,0
+Florence,MA,42.3301,-72.6927,0
+Foxboro,MA,42.0609,-71.2355,0
+Georgetown,MA,42.7238,-70.9782,0
+Gilbertville,MA,42.3611,-72.2038,0
+Glendale,MA,42.2836,-73.3445,0
+Goshen,MA,42.4545,-72.8267,0
+Green Harbor,MA,42.0775,-70.65,0
+Greenbush,MA,42.1792,-70.7501,0
+Hamilton,MA,42.6208,-70.8578,0
+Hanscom AFB,MA,42.4631,-71.2851,0
+Hathorne,MA,42.5834,-70.9859,0
+Haydenville,MA,42.4112,-72.6889,0
+Heath,MA,42.6657,-72.8333,0
+Humarock,MA,42.1361,-70.6908,0
+Huntington,MA,42.2709,-72.9032,0
+Hyannis Port,MA,41.6351,-70.3073,0
+Hyde Park,MA,42.2529,-71.1293,0
+Indian Orchard,MA,42.1513,-72.5105,0
+Jamaica Plain,MA,42.3105,-71.1174,0
+Jefferson,MA,42.3764,-71.8723,0
+Lake Pleasant,MA,42.5567,-72.5186,0
+Lakeville,MA,41.841,-70.9561,0
+Leeds,MA,42.3522,-72.7155,0
+Lenox Dale,MA,42.3394,-73.2467,0
+Linwood,MA,42.0973,-71.6455,0
+Littleton,MA,42.538,-71.485,0
+Manchaug,MA,42.0945,-71.7482,0
+Manchester,MA,42.5795,-70.7651,0
+Manomet,MA,41.8975,-70.5426,0
+Mattapan,MA,42.2758,-71.0907,0
+Menemsha,MA,41.3648,-70.7515,0
+Middleboro,MA,41.8934,-70.9117,0
+Middlefield,MA,42.3481,-73.0027,0
+Mill River,MA,42.1373,-73.1953,0
+Milton Village,MA,42.2795,-71.0782,0
+Minot,MA,42.2403,-70.7626,0
+Monponsett,MA,42.017,-70.8499,0
+Monroe Bridge,MA,42.7212,-72.9752,0
+Monterey,MA,42.1798,-73.1969,0
+Needham Heights,MA,42.2997,-71.2298,0
+New Braintree,MA,42.3205,-72.1295,0
+New Salem,MA,42.426,-72.3164,0
+New Town,MA,42.3601,-71.1308,0
+Newbury,MA,42.7553,-70.8496,0
+Newton Center,MA,42.3122,-71.1947,0
+Nonantum,MA,42.3367,-71.2094,0
+North Attleboro,MA,41.9656,-71.3253,0
+North Billerica,MA,42.5683,-71.2923,0
+North Carver,MA,41.9272,-70.7516,0
+North Chatham,MA,41.7034,-69.9668,0
+North Chelmsford,MA,42.6314,-71.3886,0
+North Dartmouth,MA,41.6526,-71.0097,0
+North Dighton,MA,41.856,-71.1551,0
+North Easton,MA,42.0544,-71.1211,0
+North Egremont,MA,42.1967,-73.4386,0
+North Grafton,MA,42.2248,-71.6893,0
+North Hatfield,MA,42.4107,-72.6253,0
+North Marshfield,MA,42.1434,-70.7705,0
+North Oxford,MA,42.1629,-71.8912,0
+North Truro,MA,42.0432,-70.1036,0
+North Uxbridge,MA,42.0878,-71.6417,0
+North Waltham,MA,42.3586,-71.0605,0
+North Weymouth,MA,42.2468,-70.9435,0
+Nutting Lake,MA,42.5381,-71.2689,0
+Ocean Bluff,MA,42.0918,-70.7061,0
+Pembroke,MA,42.0649,-70.7986,0
+Petersham,MA,42.4459,-72.2135,0
+Plainfield,MA,42.5196,-72.9252,0
+Prides Crossing,MA,42.559,-70.8253,0
+Raynham Center,MA,41.9237,-71.0526,0
+Readville,MA,42.3586,-71.0605,0
+Rochdale,MA,42.2013,-71.9108,0
+Roslindale,MA,42.2835,-71.1218,0
+Rowe,MA,42.6959,-72.9349,0
+Roxbury,MA,42.323,-71.0847,0
+Russell,MA,42.1692,-72.8545,0
+Sagamore Beach,MA,41.7922,-70.5184,0
+Sandisfield,MA,42.1135,-73.12,0
+Savoy,MA,42.5896,-73.023,0
+Sheldonville,MA,42.0283,-71.3976,0
+Siasconset,MA,41.2623,-69.9668,0
+Somerville,MA,42.383,-71.0956,0
+South Barre,MA,42.3824,-72.0998,0
+South Boston,MA,42.3361,-71.0358,0
+South Carver,MA,41.8538,-70.6557,0
+South Chatham,MA,41.6839,-70.0223,0
+South Dartmouth,MA,41.561,-70.981,0
+South Easton,MA,42.0256,-71.1084,0
+South Egremont,MA,42.1022,-73.4641,0
+South Grafton,MA,42.1748,-71.6798,0
+South Hamilton,MA,42.6268,-70.8602,0
+South Harwich,MA,41.6762,-70.0397,0
+South Lee,MA,42.2775,-73.2778,0
+South Orleans,MA,41.7567,-69.9938,0
+South Walpole,MA,42.1019,-71.2721,0
+South Wellfleet,MA,41.9196,-69.9971,0
+South Weymouth,MA,42.165,-70.9502,0
+Southfield,MA,42.0792,-73.2382,0
+Still River,MA,42.4844,-71.629,0
+Sunderland,MA,42.4661,-72.5555,0
+Thorndike,MA,42.1968,-72.3271,0
+Tyringham,MA,42.2265,-73.1976,0
+Waban,MA,42.3265,-71.2319,0
+Warwick,MA,42.6663,-72.3449,0
+Waverley,MA,42.4202,-71.2019,0
+Wellesley Hills,MA,42.3093,-71.2724,0
+Wendell Depot,MA,42.5884,-72.396,0
+West Boxford,MA,42.7077,-71.0658,0
+West Chesterfield,MA,42.3868,-72.8794,0
+West Dennis,MA,41.6608,-70.1714,0
+West Groton,MA,42.6006,-71.6302,0
+West Harwich,MA,41.6708,-70.1113,0
+West Hatfield,MA,42.3887,-72.6466,0
+West Hyannisport,MA,41.6353,-70.3192,0
+West Medford,MA,42.4293,-71.1285,0
+West Millbury,MA,42.1756,-71.8027,0
+West Roxbury,MA,42.2793,-71.1659,0
+West Townsend,MA,42.6697,-71.7434,0
+West Warren,MA,42.2024,-72.2217,0
+Westport,MA,41.6114,-71.0818,0
+Westport Point,MA,41.522,-71.0751,0
+Wheelwright,MA,42.3517,-72.1405,0
+White Horse Beach,MA,41.9317,-70.56,0
+Windsor,MA,42.5131,-73.0502,0
+Woods Hole,MA,41.5282,-70.6636,0
+Woodville,MA,42.2376,-71.5627,0
+Woronoco,MA,42.1594,-72.8751,0
+Worthington,MA,42.3902,-72.9472,0
+Abbot,ME,45.2862,-69.5528,0
+Alna,ME,44.0871,-69.6297,0
+Andover,ME,44.7371,-70.8614,0
+Anson,ME,44.773,-69.9582,0
+Ashland,ME,46.6749,-68.5109,0
+Athens,ME,44.9453,-69.6473,0
+Auburn,ME,44.0862,-70.2272,0
+Aurora,ME,44.913,-68.3517,0
+Bailey Island,ME,43.7413,-69.9927,0
+Baileyville,ME,45.1285,-67.451,0
+Bar Mills,ME,43.6133,-70.5506,0
+Bass Harbor,ME,44.2256,-68.3324,0
+Beals,ME,44.4849,-67.5918,0
+Belgrade Lakes,ME,44.5046,-69.8548,0
+Benedicta,ME,45.8056,-68.3944,0
+Bernard,ME,44.2501,-68.354,0
+Biddeford Pool,ME,43.4455,-70.3434,0
+Bingham,ME,45.142,-69.8792,0
+Birch Harbor,ME,44.3812,-68.0329,0
+Blaine,ME,46.4882,-67.8268,0
+Blue Hill,ME,44.4085,-68.5871,0
+Bowdoin,ME,44.0576,-69.9682,0
+Bowdoinham,ME,44.0367,-69.8592,0
+Bremen,ME,44.0154,-69.4348,0
+Brewer,ME,44.781,-68.7361,0
+Bridgewater,ME,46.4286,-67.8857,0
+Brooklin,ME,44.3009,-68.5736,0
+Brooksville,ME,44.3661,-68.7406,0
+Brookton,ME,45.5951,-67.662,0
+Brownville Junction,ME,45.3503,-69.0529,0
+Bryant Pond,ME,44.4109,-70.6299,0
+Burlington,ME,45.193,-68.4105,0
+Bustins Island,ME,43.8002,-70.0719,0
+Cambridge,ME,45.0339,-69.4288,0
+Cape Elizabeth,ME,43.5933,-70.2387,0
+Cape Porpoise,ME,43.3706,-70.4379,0
+Caratunk,ME,45.2547,-69.9061,0
+Casco,ME,43.9686,-70.5115,0
+Center Lovell,ME,44.1704,-70.8669,0
+Chamberlain,ME,43.8922,-69.4891,0
+Chebeague Island,ME,43.7337,-70.1181,0
+China Village,ME,44.4788,-69.5176,0
+Clayton Lake,ME,46.6241,-69.5399,0
+Cliff Island,ME,43.6967,-70.1031,0
+Columbia Falls,ME,44.6915,-67.7119,0
+Coopers Mills,ME,44.3173,-69.4337,0
+Corea,ME,44.4201,-67.9874,0
+Corinth,ME,44.9803,-69.0106,0
+Cranberry Isles,ME,44.2471,-68.2586,0
+Crouseville,ME,46.7552,-68.0968,0
+Cumberland Center,ME,43.7973,-70.2665,0
+Cumberland Foreside,ME,43.7617,-70.1989,0
+Cutler,ME,44.6875,-67.2237,0
+Danforth,ME,45.5297,-67.8618,0
+Danville,ME,44.021,-70.2756,0
+Dennysville,ME,44.8665,-67.2808,0
+Detroit,ME,44.7613,-69.3165,0
+Dresden,ME,44.0766,-69.7401,0
+Dryden,ME,44.6206,-70.2577,0
+Durham,ME,43.9614,-70.1308,0
+Eagle Lake,ME,47.0235,-68.6919,0
+East Andover,ME,44.6023,-70.7032,0
+East Baldwin,ME,43.8324,-70.6736,0
+East Blue Hill,ME,44.4223,-68.5101,0
+East Boothbay,ME,43.8339,-69.5903,0
+East Dixfield,ME,44.5744,-70.2996,0
+East Livermore,ME,44.4144,-70.139,0
+East Newport,ME,44.8208,-69.2232,0
+East Orland,ME,44.5705,-68.6728,0
+East Parsonsfield,ME,43.7336,-70.8483,0
+East Poland,ME,44.0701,-70.3286,0
+East Vassalboro,ME,44.4478,-69.6066,0
+East Waterboro,ME,43.5869,-70.7026,0
+East Wilton,ME,44.6175,-70.1905,0
+East Winthrop,ME,44.3226,-69.9006,0
+Estcourt Station,ME,47.3696,-69.1884,0
+Eustis,ME,45.4008,-70.6309,0
+Exeter,ME,44.9639,-69.1461,0
+Farmington Falls,ME,44.6205,-70.0758,0
+Fort Kent Mills,ME,47.2386,-68.5845,0
+Freedom,ME,44.4634,-69.2714,0
+Frenchboro,ME,44.1133,-68.3534,0
+Georgetown,ME,43.8132,-69.7437,0
+Grand Isle,ME,47.2658,-68.131,0
+Grand Lake Stream,ME,45.1795,-67.7751,0
+Gray,ME,43.8876,-70.3411,0
+Greene,ME,44.192,-70.1466,0
+Greenville Junction,ME,45.5303,-69.6639,0
+Greenwood,ME,44.3175,-70.675,0
+Guilford,ME,45.2115,-69.398,0
+Hanover,ME,44.5001,-70.7373,0
+Harborside,ME,44.3436,-68.7975,0
+Harmony,ME,45.0679,-69.6201,0
+Harrington,ME,44.5763,-67.818,0
+Hartland,ME,44.8589,-69.5278,0
+Hinckley,ME,44.6859,-69.6332,0
+Hollis Center,ME,43.6311,-70.6168,0
+Hulls Cove,ME,44.4193,-68.2514,0
+Island Falls,ME,45.9496,-68.2299,0
+Isle Au Haut,ME,44.0482,-68.6302,0
+Isle Of Springs,ME,43.8612,-69.6815,0
+Islesboro,ME,44.312,-68.914,0
+Islesford,ME,44.2593,-68.2264,0
+Jackman,ME,45.7402,-70.2456,0
+Jonesboro,ME,44.6684,-67.5863,0
+Kents Hill,ME,44.4351,-70.0731,0
+Kingman,ME,45.5296,-68.1822,0
+Lagrange,ME,45.2121,-68.8244,0
+Lambert Lake,ME,45.5165,-67.4818,0
+Lee,ME,45.3782,-68.2895,0
+Liberty,ME,44.3687,-69.3317,0
+Lincolnville Center,ME,44.2989,-69.1047,0
+Litchfield,ME,44.1654,-69.9377,0
+Little Deer Isle,ME,44.2899,-68.7161,0
+Long Island,ME,43.6913,-70.1536,0
+Lubec,ME,44.8068,-67.1148,0
+Mapleton,ME,46.6558,-68.1759,0
+Mars Hill,ME,46.5163,-67.9417,0
+Matinicus,ME,43.8481,-68.8918,0
+Mattawamkeag,ME,45.5498,-68.3199,0
+Meddybemps,ME,45.0091,-67.399,0
+Mexico,ME,44.5726,-70.5247,0
+Milford,ME,44.9728,-68.5693,0
+Monhegan,ME,43.7643,-69.3125,0
+Monroe,ME,44.5925,-69.0456,0
+Monson,ME,45.2996,-69.5209,0
+Monticello,ME,46.3465,-67.8678,0
+Moody,ME,43.2726,-70.5989,0
+Morrill,ME,44.4044,-69.157,0
+Mount Desert,ME,44.3366,-68.3721,0
+Naples,ME,43.9715,-70.6259,0
+New Harbor,ME,43.8584,-69.5049,0
+New Limerick,ME,46.1191,-67.9726,0
+New Portland,ME,44.8797,-70.0424,0
+New Sweden,ME,46.9699,-68.121,0
+New Vineyard,ME,44.7995,-70.1064,0
+Newcastle,ME,44.0491,-69.5643,0
+Newry,ME,44.5418,-70.788,0
+North Anson,ME,44.9341,-69.9426,0
+North Bridgton,ME,44.0996,-70.6997,0
+North Haven,ME,44.148,-68.8758,0
+North Jay,ME,44.5505,-70.2288,0
+North Monmouth,ME,44.2727,-70.0333,0
+North Turner,ME,44.3425,-70.257,0
+North Vassalboro,ME,44.4675,-69.6077,0
+North Waterboro,ME,43.637,-70.7449,0
+North Waterford,ME,44.2079,-70.7158,0
+North Yarmouth,ME,43.8579,-70.2341,0
+Northeast Harbor,ME,44.3008,-68.2857,0
+Oakfield,ME,46.1187,-68.1041,0
+Ocean Park,ME,43.5007,-70.3971,0
+Oquossoc,ME,44.8744,-70.7333,0
+Orient,ME,45.8875,-67.8335,0
+Orrs Island,ME,43.7724,-69.9668,0
+Oxbow,ME,46.4111,-68.5684,0
+Passadumkeag,ME,45.1849,-68.592,0
+Peaks Island,ME,43.6697,-70.1912,0
+Pemaquid,ME,43.894,-69.5202,0
+Pembroke,ME,44.9769,-67.2338,0
+Perham,ME,46.8447,-68.3357,0
+Perry,ME,44.981,-67.1119,0
+Port Clyde,ME,43.9276,-69.2603,0
+Portage,ME,46.7876,-68.5018,0
+Pownal,ME,43.8945,-70.1835,0
+Princeton,ME,45.185,-67.5663,0
+Prospect Harbor,ME,44.4337,-68.0364,0
+Randolph,ME,44.2334,-69.7407,0
+Rangeley,ME,44.9673,-70.6388,0
+Robbinston,ME,45.0626,-67.1723,0
+Rockwood,ME,45.6114,-69.9183,0
+Round Pond,ME,43.9271,-69.4554,0
+Roxbury,ME,44.7479,-70.7051,0
+Saco,ME,43.534,-70.462,0
+Saint Agatha,ME,47.2444,-68.3183,0
+Saint David,ME,47.2779,-68.235,0
+Saint Francis,ME,47.0919,-69.0569,0
+Salsbury Cove,ME,44.4328,-68.285,0
+Sandy Point,ME,44.5148,-68.8136,0
+Sargentville,ME,44.3258,-68.7119,0
+Seal Cove,ME,44.2784,-68.3879,0
+Seal Harbor,ME,44.2995,-68.2444,0
+Searsport,ME,44.4966,-68.9316,0
+Sebago,ME,43.8911,-70.6623,0
+Sebasco Estates,ME,43.7877,-69.8439,0
+Sebec,ME,45.2392,-69.1052,0
+Shawmut,ME,44.6205,-69.5881,0
+Sheridan,ME,46.6572,-68.4057,0
+Sherman,ME,45.8094,-68.3044,0
+Shirley Mills,ME,45.3646,-69.6212,0
+Sinclair,ME,47.1431,-68.2385,0
+Smithfield,ME,44.6334,-69.8065,0
+Smyrna Mills,ME,46.1654,-68.2383,0
+Solon,ME,44.9847,-69.803,0
+Sorrento,ME,44.4919,-68.1782,0
+South Bristol,ME,43.8648,-69.5646,0
+South Casco,ME,43.8731,-70.5138,0
+South China,ME,44.4205,-69.5314,0
+South Freeport,ME,43.8208,-70.1064,0
+South Gardiner,ME,44.1792,-69.7604,0
+Southport,ME,43.8187,-69.6679,0
+Southwest Harbor,ME,44.2259,-68.2997,0
+Springfield,ME,45.3954,-68.103,0
+Spruce Head,ME,44.0072,-69.1736,0
+Squirrel Island,ME,43.809,-69.6306,0
+Stacyville,ME,45.8564,-68.4814,0
+Standish,ME,43.7719,-70.5528,0
+Stillwater,ME,44.9086,-68.6869,0
+Stockholm,ME,47.063,-68.2531,0
+Stoneham,ME,44.2612,-70.881,0
+Stratton,ME,45.1161,-70.4358,0
+Sumner,ME,44.3765,-70.4425,0
+Sunset,ME,44.2129,-68.737,0
+Swans Island,ME,44.1598,-68.4439,0
+Temple,ME,44.6976,-70.2817,0
+Tenants Harbor,ME,43.9668,-69.2308,0
+Thorndike,ME,44.5739,-69.2316,0
+Topsfield,ME,45.4252,-67.7681,0
+Trevett,ME,43.9024,-69.6762,0
+Unity,ME,44.6039,-69.3401,0
+Vanceboro,ME,45.5533,-67.4754,0
+Vienna,ME,44.5367,-70.0022,0
+Waite,ME,45.3918,-67.5672,0
+Wallagrass,ME,47.1503,-68.6304,0
+Walpole,ME,43.9469,-69.5583,0
+Washburn,ME,46.7876,-68.1664,0
+Waterford,ME,44.1964,-70.7542,0
+Weld,ME,44.7071,-70.4546,0
+Wells,ME,43.3225,-70.6324,0
+Wesley,ME,44.7153,-67.4619,0
+West Baldwin,ME,43.8335,-70.734,0
+West Bethel,ME,44.4015,-70.8569,0
+West Boothbay Harbor,ME,43.8476,-69.6469,0
+West Enfield,ME,45.2663,-68.5522,0
+West Farmington,ME,44.6626,-70.1559,0
+West Forks,ME,45.4275,-69.9752,0
+West Minot,ME,44.1714,-70.3642,0
+West Newfield,ME,43.6352,-70.8953,0
+West Poland,ME,44.0513,-70.4533,0
+West Rockport,ME,44.1907,-69.1472,0
+Westfield,ME,46.5237,-67.9573,0
+Whiting,ME,44.8548,-67.0807,0
+Windham,ME,43.7917,-70.4056,0
+Winn,ME,45.4638,-68.3233,0
+Winter Harbor,ME,44.3787,-68.0933,0
+Wytopitlock,ME,45.6988,-68.0462,0
+York,ME,43.1646,-70.6755,0
+Acworth,NH,43.2354,-72.2959,0
+Alton,NH,43.4739,-71.2325,0
+Alton Bay,NH,43.5059,-71.2742,0
+Amherst,NH,42.8696,-71.611,0
+Ashuelot,NH,42.797,-72.4355,0
+Bartlett,NH,44.1186,-71.2823,0
+Bath,NH,44.1767,-71.9894,0
+Bennington,NH,43.0181,-71.909,0
+Bethlehem,NH,44.2528,-71.6036,0
+Bow,NH,43.1291,-71.5424,0
+Bradford,NH,43.2364,-71.9602,0
+Bretton Woods,NH,44.2582,-71.4419,0
+Campton,NH,43.9742,-71.5807,0
+Canaan,NH,43.6737,-72.0174,0
+Center Barnstead,NH,43.3592,-71.2351,0
+Center Conway,NH,44.056,-71.0538,0
+Center Ossipee,NH,43.7715,-71.1561,0
+Center Sandwich,NH,43.8343,-71.4477,0
+Center Strafford,NH,43.2649,-71.1069,0
+Center Tuftonboro,NH,43.7024,-71.2572,0
+Charlestown,NH,43.248,-72.3762,0
+Chocorua,NH,43.8797,-71.2291,0
+Cornish,NH,43.472,-72.3283,0
+Cornish Flat,NH,43.4973,-72.28,0
+Drewsville,NH,43.1281,-72.3928,0
+Dunbarton,NH,43.1067,-71.5892,0
+East Andover,NH,43.4783,-71.7646,0
+East Candia,NH,43.0484,-71.2493,0
+East Derry,NH,42.8946,-71.2917,0
+East Hampstead,NH,42.8865,-71.1192,0
+East Wakefield,NH,43.6411,-71.0,0
+Eaton Center,NH,43.9094,-71.0469,0
+Elkins,NH,43.4407,-71.9528,0
+Enfield Center,NH,43.5903,-72.1117,0
+Errol,NH,44.7813,-71.1819,0
+Etna,NH,43.7132,-72.2081,0
+Franconia,NH,44.1761,-71.671,0
+Georges Mills,NH,43.4431,-72.0859,0
+Gilmanton Iron Works,NH,43.4185,-71.3063,0
+Gilsum,NH,43.0336,-72.2487,0
+Glen,NH,44.1011,-71.1812,0
+Glencliff,NH,43.9825,-71.8939,0
+Goshen,NH,43.2946,-72.1129,0
+Guild,NH,43.3769,-72.1388,0
+Hancock,NH,42.9754,-71.9962,0
+Hebron,NH,43.7217,-71.834,0
+Intervale,NH,44.1759,-71.0979,0
+Jackson,NH,44.1829,-71.2034,0
+Kearsarge,NH,44.0756,-71.1182,0
+Lincoln,NH,44.0895,-71.5854,0
+Lisbon,NH,44.2138,-71.89,0
+Lochmere,NH,43.4712,-71.5308,0
+Loudon,NH,43.3215,-71.4415,0
+Lyme Center,NH,43.7995,-72.1234,0
+Marlow,NH,43.1261,-72.1745,0
+Melvin Village,NH,43.6887,-71.3049,0
+Meriden,NH,43.5296,-72.274,0
+Milton,NH,43.4404,-71.0236,0
+Milton Mills,NH,43.5099,-70.9764,0
+Mirror Lake,NH,43.6399,-71.293,0
+Monroe,NH,44.2743,-71.999,0
+Mount Washington,NH,44.2855,-71.2979,0
+Nelson,NH,43.0064,-72.1186,0
+New Hampton,NH,43.615,-71.62,0
+Newfields,NH,43.037,-70.9644,0
+Newton Junction,NH,42.8672,-71.0666,0
+North Salem,NH,42.8368,-71.2213,0
+North Sandwich,NH,43.8662,-71.4011,0
+North Stratford,NH,44.7245,-71.4782,0
+North Sutton,NH,43.3584,-71.9198,0
+North Walpole,NH,43.1407,-72.4368,0
+North Woodstock,NH,44.0235,-71.7327,0
+Piermont,NH,43.9722,-72.038,0
+Pike,NH,44.0344,-71.9774,0
+Pittsburg,NH,45.1302,-71.2806,0
+Plainfield,NH,43.5366,-72.2835,0
+Randolph,NH,44.3732,-71.2916,0
+Rye Beach,NH,42.9768,-70.7664,0
+Silver Lake,NH,43.8778,-71.1857,0
+South Acworth,NH,43.1895,-72.2854,0
+South Newbury,NH,43.2956,-71.9974,0
+South Sutton,NH,43.3084,-71.9165,0
+South Tamworth,NH,43.809,-71.3002,0
+Spofford,NH,42.8928,-72.4033,0
+Stoddard,NH,43.073,-72.1175,0
+Stratham,NH,43.0146,-70.9005,0
+Sugar Hill,NH,44.2201,-71.8018,0
+Sullivan,NH,43.0111,-72.217,0
+Tilton,NH,43.432,-71.5685,0
+Twin Mountain,NH,44.2848,-71.5034,0
+Union,NH,43.4764,-71.0552,0
+Walpole,NH,43.0748,-72.4063,0
+Warner,NH,43.3056,-71.8734,0
+Warren,NH,43.9419,-71.8765,0
+Washington,NH,43.1839,-72.0938,0
+Waterville Valley,NH,43.9463,-71.4653,0
+Wentworth,NH,43.8671,-71.949,0
+West Chesterfield,NH,42.8942,-72.5129,0
+West Lebanon,NH,43.6451,-72.2933,0
+West Nottingham,NH,43.1416,-71.1297,0
+West Ossipee,NH,43.8265,-71.2002,0
+West Peterborough,NH,42.8872,-71.9856,0
+West Stewartstown,NH,44.9955,-71.5318,0
+Winnisquam,NH,43.5015,-71.5127,0
+Wolfeboro Falls,NH,43.5919,-71.2062,0
+Wonalancet,NH,43.9006,-71.3293,0
+Adamsville,RI,41.5544,-71.1314,0
+Albion,RI,41.9514,-71.4551,0
+Block Island,RI,41.1892,-71.5786,0
+Carolina,RI,41.4748,-71.6586,0
+Charlestown,RI,41.3959,-71.663,0
+Clayville,RI,41.7707,-71.6655,0
+Fiskeville,RI,41.7345,-71.5488,0
+Forestdale,RI,41.9458,-71.7004,0
+Glendale,RI,41.9762,-71.6332,0
+Greene,RI,41.6916,-71.7272,0
+Harmony,RI,41.8875,-71.5975,0
+Hope,RI,41.7509,-71.5887,0
+Kenyon,RI,41.4483,-71.6218,0
+Little Compton,RI,41.5086,-71.1645,0
+Manville,RI,41.9653,-71.4712,0
+Mapleville,RI,41.9422,-71.6351,0
+Oakland,RI,41.9641,-71.6534,0
+Peace Dale,RI,41.4529,-71.499,0
+Prudence Island,RI,41.6226,-71.3347,0
+Riverside,RI,41.7769,-71.3503,0
+Rockville,RI,41.5094,-71.7843,0
+Rumford,RI,41.843,-71.3553,0
+Saunderstown,RI,41.5186,-71.4669,0
+Shannock,RI,41.4559,-71.6388,0
+Slatersville,RI,42.0033,-71.5855,0
+Slocum,RI,41.5381,-71.5324,0
+Wakefield,RI,41.4277,-71.5364,0
+West Kingston,RI,41.5103,-71.5906,0
+Wood River Junction,RI,41.4621,-71.7017,0
+Wyoming,RI,41.5222,-71.6698,0
+Adamant,VT,44.3517,-72.4982,0
+Albany,VT,44.7491,-72.358,0
+Alburgh,VT,44.9285,-73.2733,0
+Ascutney,VT,43.4242,-72.4426,0
+Averill,VT,44.9437,-71.6827,0
+Bakersfield,VT,44.7829,-72.7516,0
+Barnard,VT,43.7336,-72.5918,0
+Barnet,VT,44.3163,-72.0828,0
+Barton,VT,44.745,-72.1472,0
+Beebe Plain,VT,45.0053,-72.1413,0
+Beecher Falls,VT,45.0047,-71.5102,0
+Belmont,VT,43.4211,-72.8207,0
+Belvidere Center,VT,44.7661,-72.6693,0
+Benson,VT,43.7066,-73.3118,0
+Bethel,VT,43.7941,-72.6601,0
+Bomoseen,VT,43.6356,-73.204,0
+Bondville,VT,43.1626,-72.9322,0
+Bradford,VT,44.009,-72.1682,0
+Bridgewater,VT,43.5734,-72.6425,0
+Bridgewater Corners,VT,43.6044,-72.6944,0
+Brookfield,VT,44.0263,-72.5823,0
+Brownsville,VT,43.4633,-72.4791,0
+Cabot,VT,44.407,-72.2899,0
+Calais,VT,44.3787,-72.4973,0
+Cambridge,VT,44.6482,-72.907,0
+Cambridgeport,VT,43.1536,-72.5733,0
+Canaan,VT,44.96,-71.5975,0
+Cavendish,VT,43.4005,-72.5836,0
+Center Rutland,VT,43.6193,-73.0187,0
+Concord,VT,44.4381,-71.8513,0
+Corinth,VT,44.0281,-72.2932,0
+Coventry,VT,44.8569,-72.2355,0
+Craftsbury,VT,44.6541,-72.3898,0
+Craftsbury Common,VT,44.6824,-72.3586,0
+Cuttingsville,VT,43.5489,-72.8487,0
+Danville,VT,44.4533,-72.1229,0
+Derby,VT,44.9547,-72.0826,0
+Derby Line,VT,44.9702,-72.0214,0
+Dorset,VT,43.2595,-73.06,0
+East Arlington,VT,43.0709,-73.0732,0
+East Barre,VT,44.1478,-72.3949,0
+East Berkshire,VT,44.9416,-72.7025,0
+East Burke,VT,44.5943,-71.9009,0
+East Calais,VT,44.3905,-72.4336,0
+East Charleston,VT,44.8395,-71.9548,0
+East Corinth,VT,44.0703,-72.2159,0
+East Dorset,VT,43.2572,-73.0086,0
+East Dover,VT,42.9549,-72.7806,0
+East Fairfield,VT,44.7614,-72.882,0
+East Hardwick,VT,44.5224,-72.2477,0
+East Haven,VT,44.6665,-71.8289,0
+East Middlebury,VT,43.9734,-73.1064,0
+East Montpelier,VT,44.2815,-72.4961,0
+East Poultney,VT,43.5266,-73.2052,0
+East Randolph,VT,43.949,-72.539,0
+East Ryegate,VT,44.2134,-72.1059,0
+East Saint Johnsbury,VT,44.4387,-71.9463,0
+East Thetford,VT,43.8169,-72.2182,0
+East Wallingford,VT,43.4262,-72.8886,0
+Eden,VT,44.7343,-72.6334,0
+Eden Mills,VT,44.7028,-72.4902,0
+Essex,VT,44.5215,-73.0608,0
+Fairfax,VT,44.7163,-73.0172,0
+Fairfield,VT,44.8092,-72.97,0
+Fairlee,VT,43.9174,-72.1892,0
+Florence,VT,43.6883,-73.0762,0
+Forest Dale,VT,43.8284,-73.0546,0
+Franklin,VT,44.9586,-72.9124,0
+Gaysville,VT,43.7106,-72.7547,0
+Gilman,VT,44.4128,-71.7878,0
+Glover,VT,44.6778,-72.2217,0
+Grafton,VT,43.17,-72.6201,0
+Granby,VT,44.6025,-71.7203,0
+Grand Isle,VT,44.7231,-73.2999,0
+Graniteville,VT,44.1473,-72.479,0
+Granville,VT,44.0049,-72.8293,0
+Greensboro,VT,44.604,-72.2891,0
+Greensboro Bend,VT,44.5655,-72.2183,0
+Groton,VT,44.2274,-72.2565,0
+Hancock,VT,43.9176,-72.9084,0
+Hartland,VT,43.5782,-72.4291,0
+Hartland Four Corners,VT,43.5466,-72.4252,0
+Highgate Center,VT,44.9633,-73.0096,0
+Highgate Springs,VT,44.9766,-73.1054,0
+Huntington,VT,44.2917,-72.961,0
+Hyde Park,VT,44.6289,-72.5642,0
+Hydeville,VT,43.6179,-73.2342,0
+Irasburg,VT,44.8006,-72.3001,0
+Island Pond,VT,44.7798,-71.8452,0
+Isle La Motte,VT,44.8904,-73.3012,0
+Jacksonville,VT,42.7812,-72.7901,0
+Jeffersonville,VT,44.641,-72.8135,0
+Jonesville,VT,44.3836,-72.9382,0
+Killington,VT,43.6555,-72.7853,0
+Lake Elmore,VT,44.5414,-72.5291,0
+Lowell,VT,44.7867,-72.4527,0
+Lower Waterford,VT,44.3547,-71.9077,0
+Ludlow,VT,43.3989,-72.7097,0
+Lyndon Center,VT,44.5439,-72.0184,0
+Manchester Center,VT,43.1697,-73.0661,0
+Marlboro,VT,42.8463,-72.7504,0
+Marshfield,VT,44.3603,-72.353,0
+Mc Indoe Falls,VT,44.2588,-72.0585,0
+Middlebury,VT,43.999,-73.1761,0
+Middletown Springs,VT,43.4841,-73.1231,0
+Monkton,VT,44.2388,-73.1483,0
+Montgomery Center,VT,44.8541,-72.5879,0
+Morgan,VT,44.8843,-71.9844,0
+Moscow,VT,44.4415,-72.7159,0
+New Haven,VT,44.1415,-73.164,0
+Newbury,VT,44.0766,-72.0896,0
+Newport Center,VT,44.923,-72.2975,0
+North Clarendon,VT,43.537,-72.9525,0
+North Concord,VT,44.5555,-71.7704,0
+North Ferrisburgh,VT,44.2445,-73.2036,0
+North Hartland,VT,43.597,-72.3483,0
+North Hyde Park,VT,44.6706,-72.5988,0
+North Montpelier,VT,44.2769,-72.4681,0
+North Pomfret,VT,43.7217,-72.5013,0
+North Pownal,VT,42.8135,-73.2655,0
+North Springfield,VT,43.3387,-72.5244,0
+North Thetford,VT,43.8568,-72.1849,0
+North Troy,VT,44.9344,-72.4422,0
+Northfield Falls,VT,44.17,-72.6499,0
+Norton,VT,44.9321,-71.8114,0
+Norwich,VT,43.7478,-72.3019,0
+Orleans,VT,44.7985,-72.1002,0
+Orwell,VT,43.7878,-73.2989,0
+Passumpsic,VT,44.3801,-72.0925,0
+Peacham,VT,44.3267,-72.2263,0
+Perkinsville,VT,43.3934,-72.4801,0
+Peru,VT,43.2208,-72.896,0
+Pittsfield,VT,43.7759,-72.8903,0
+Pittsford,VT,43.7423,-72.998,0
+Plainfield,VT,44.2913,-72.4047,0
+Plymouth,VT,43.5283,-72.7222,0
+Post Mills,VT,43.8841,-72.2664,0
+Proctor,VT,43.6496,-73.0327,0
+Proctorsville,VT,43.4167,-72.6266,0
+Putney,VT,43.0225,-72.5338,0
+Quechee,VT,43.658,-72.4332,0
+Randolph Center,VT,43.933,-72.5678,0
+Reading,VT,43.5024,-72.585,0
+Readsboro,VT,42.7997,-72.9753,0
+Richmond,VT,44.3882,-72.9506,0
+Ripton,VT,43.9841,-72.9856,0
+Rochester,VT,43.8673,-72.8485,0
+Roxbury,VT,44.0696,-72.745,0
+Rupert,VT,43.2576,-73.2255,0
+Saint Albans Bay,VT,44.8073,-73.1398,0
+Saint Johnsbury,VT,44.4231,-71.9689,0
+Saint Johnsbury Center,VT,44.457,-72.0073,0
+Saxtons River,VT,43.1435,-72.5091,0
+Shaftsbury,VT,42.9798,-73.201,0
+Sharon,VT,43.7794,-72.4338,0
+Sheffield,VT,44.6371,-72.1343,0
+Shelburne,VT,44.3949,-73.2304,0
+Sheldon,VT,44.8857,-72.9698,0
+Sheldon Springs,VT,44.9056,-72.981,0
+Shoreham,VT,43.8749,-73.3218,0
+South Hero,VT,44.6257,-73.3093,0
+South Londonderry,VT,43.1833,-72.8034,0
+South Newfane,VT,42.9408,-72.7358,0
+South Pomfret,VT,43.6895,-72.5366,0
+South Royalton,VT,43.7811,-72.5395,0
+South Ryegate,VT,44.1512,-72.1639,0
+South Strafford,VT,43.8229,-72.3594,0
+South Woodstock,VT,43.5636,-72.5701,0
+Stamford,VT,42.7896,-73.0777,0
+Stockbridge,VT,43.7736,-72.7402,0
+Strafford,VT,43.8771,-72.3812,0
+Sutton,VT,44.6643,-72.042,0
+Taftsville,VT,43.6287,-72.4614,0
+Thetford,VT,43.8332,-72.2236,0
+Thetford Center,VT,43.8503,-72.2664,0
+Topsham,VT,44.1313,-72.2412,0
+Troy,VT,44.8534,-72.3647,0
+Tunbridge,VT,43.9049,-72.4767,0
+Underhill,VT,44.5496,-72.8914,0
+Underhill Center,VT,44.5077,-72.9,0
+Vernon,VT,42.7756,-72.5121,0
+Vershire,VT,43.9556,-72.3299,0
+Waitsfield,VT,44.2008,-72.8481,0
+Wallingford,VT,43.4455,-73.0081,0
+Wardsboro,VT,43.0215,-72.8132,0
+Warren,VT,44.1085,-72.8525,0
+Waterbury Center,VT,44.3921,-72.7058,0
+Waterville,VT,44.7197,-72.7664,0
+Websterville,VT,44.1596,-72.4695,0
+Wells,VT,43.4472,-73.1818,0
+Wells River,VT,44.1386,-72.0879,0
+West Burke,VT,44.6759,-71.9388,0
+West Charleston,VT,44.8635,-72.0458,0
+West Danville,VT,44.4164,-72.2042,0
+West Dover,VT,42.9734,-72.897,0
+West Dummerston,VT,42.9264,-72.6159,0
+West Fairlee,VT,43.9291,-72.2694,0
+West Halifax,VT,42.7745,-72.7437,0
+West Hartford,VT,43.716,-72.4538,0
+West Newbury,VT,44.071,-72.1477,0
+West Pawlet,VT,43.3611,-73.2181,0
+West Rupert,VT,43.2656,-73.1885,0
+West Topsham,VT,44.1275,-72.308,0
+West Townshend,VT,43.1461,-72.7192,0
+West Wardsboro,VT,43.0545,-72.927,0
+Westfield,VT,44.8808,-72.4524,0
+Westford,VT,44.6034,-73.0273,0
+Westminster,VT,43.0978,-72.477,0
+Westminster Station,VT,43.0873,-72.4468,0
+Weston,VT,43.3096,-72.8115,0
+Whiting,VT,43.8802,-73.2038,0
+Whitingham,VT,42.7831,-72.8731,0
+Williamsville,VT,42.941,-72.677,0
+Wilmington,VT,42.8726,-72.8886,0
+Wolcott,VT,44.5355,-72.4822,0
+Woodbury,VT,44.4498,-72.4123,0
+Worcester,VT,44.3977,-72.5726,0
