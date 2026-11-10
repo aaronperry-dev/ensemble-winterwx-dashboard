@@ -172,13 +172,13 @@ const localStamp = ms => {
   try { return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(ms); } catch { return ""; }
 };
 const shortName = k => M.ensembles[k]?.short || k.toUpperCase();
-// The combined view pools whichever systems have data at each hour; say so when that is fewer than the build has.
+// Every system is in the combined view at every hour; say so when one of them has no data of its own for this hour and is filled in.
 function blendNote() {
   const n = $("blend-now"), e = E();
   let t = "";
-  if (S.ens === "all" && e.contrib) {
-    const here = (e.contrib[S.t] || "").split(",").filter(Boolean), absent = Object.keys(M.ensembles).filter(k => k !== "all" && !here.includes(k));
-    if (absent.length) t = `Blend of ${here.map(shortName).join(" + ") || "nothing"} only: ${absent.map(shortName).join(", ")} ${absent.length > 1 ? "have" : "has"} no data for this hour`;
+  if (S.ens === "all" && e.filled) {
+    const f = (e.filled[S.t] || "").split(",").filter(Boolean);
+    if (f.length) t = `${f.map(shortName).join(" + ")} ${f.length > 1 ? "have" : "has"} no data for this hour; filled in between its neighbouring hours`;
   }
   n.textContent = t; n.hidden = !t; n.title = t;
 }
