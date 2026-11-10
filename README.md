@@ -27,7 +27,7 @@ fetch GRIB2 ──► regrid to 0.25° New England grid ──► snow per membe
 * Snow-to-liquid method (see below), per system.
 * A bottom dock with the time slider and a **fan chart** (5–95 %, 10–90 % and 25–75 % bands, 50th percentile, mean, maximum) for the point you click. The chart is a second time control (click or drag it); ←/→ step the slider. A table view of all 14 statistics at the point is one button away.
 * **Town search** – the box in the header completes town and city names as you type (add a state to narrow it: "wilton nh"). Picking one moves the chosen point and the map there; the chart and the readout then show the ensemble values at that point. The name is kept in the URL.
-* Layers: counties, state lines, highways with route shields, towns, peaks, ski areas. Light and dark appearance. All state is in the URL hash, so a view can be shared.
+* Layers: counties, state lines, highways with route shields (Interstate and U.S. route shields, and a shape for each New England state's routes; state routes of New England and New York come from Natural Earth's 1:10m roads, so only the main ones appear), towns, peaks, ski areas, and a water mask that hides the model field over the ocean and lakes. Every line is drawn with a light (dark mode: dark) casing under a thin core so it stays visible over any colour of the snowfall field; the layers are stacked: field, water mask, coast, counties, states, roads, labels. State-route shield shapes are in `site/js/shields.js` (`STATE_SHAPES`) and are simplified. Light and dark appearance. All state is in the URL hash, so a view can be shared.
 
 ## Run it locally
 
@@ -56,7 +56,7 @@ python -m ensemble_snow.build --ensembles gefs --max-fhr 96 --workers 16
 2. Run **Actions → Update snowfall ensemble dashboard → Run workflow** once with *probe* ticked to check the data sources, then once with *force* ticked to build and publish.
 3. After that the workflow runs by itself at about 08:30 and 20:30 UTC (the time the 00/12 UTC ECMWF run is out), with retries an hour and two later. An attempt that finds the live site already showing the newest runs from the same code finishes in about a minute without deploying (`--skip-if-deployed`). A push to `main` rebuilds too.
 
-The deployed site is about 60 MB of static files: the page, vendored Leaflet and font, ~100 kB of GIS JSON (loaded lazily) and, per (system, method), a bundle of about 1.4–1.8 MB (it holds every period, statistic and time; about 60 MB for all four systems) that the browser fetches only when selected.
+The deployed site is about 60 MB of static files: the page, vendored Leaflet and font, ~450 kB of GIS JSON (loaded lazily) and, per (system, method), a bundle of about 1.4–1.8 MB (it holds every period, statistic and time; about 60 MB for all four systems) that the browser fetches only when selected.
 
 ### Rebuilds that do not download the model again
 
