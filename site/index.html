@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
 <title>New England snowfall ensembles</title>
-<meta name="description" content="Snowfall percentiles and probabilities for New England from the ECMWF, NCEP and Canadian ensembles, by several snow-to-liquid ratio methods.">
+<meta name="description" content="Snowfall and liquid precipitation percentiles and probabilities for New England from the ECMWF, NCEP and Canadian ensembles, by several snow-to-liquid ratio methods.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2712%27 fill=%27%232a78d6%27/%3E%3C/svg%3E">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="app.css">
@@ -36,6 +36,12 @@
     </section>
 
     <section>
+      <h2 id="h-param">Parameter</h2>
+      <div id="param" class="seg" role="radiogroup" aria-labelledby="h-param"></div>
+      <p id="param-note" class="fine"></p>
+    </section>
+
+    <section id="method-sec">
       <h2 id="h-method">Snow-to-liquid method</h2>
       <select id="method" aria-labelledby="h-method"></select>
       <p id="method-desc" class="fine"></p>
@@ -100,7 +106,7 @@
       <div class="where"><strong id="where"></strong><span id="where-sub">Click the map to move the point</span></div>
     </div>
     <div class="dock-body">
-      <canvas id="chart" tabindex="0" role="img" aria-label="Ensemble spread of snowfall at the chosen point by forecast time. Left and right arrow keys change the time."></canvas>
+      <canvas id="chart" tabindex="0" role="img" aria-label="Ensemble spread at the chosen point by forecast time. Left and right arrow keys change the time."></canvas>
       <div id="chart-tip" class="tip" hidden></div>
       <div id="table-wrap" class="table-wrap" hidden></div>
     </div>
