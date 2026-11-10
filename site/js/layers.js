@@ -125,7 +125,7 @@ export class Gis {
     const place = (lat, lon, text, cls) => {
       if (!b.contains([lat, lon])) return false;
       const p = m.latLngToContainerPoint([lat, lon]);
-      const w = text.length * (cls.includes("city") ? 7.6 : 6.8) + 16, h = 16;
+      const w = text.length * (cls.includes("small") ? 7.4 : cls.includes("city") ? 8.6 : 7.4) + 18, h = 18;
       if (!fits(p.x - 4, p.y - h / 2, w, h)) return false;
       const el = document.createElement("div"); el.className = "lbl " + cls;
       const lp = m.containerPointToLayerPoint(p);
