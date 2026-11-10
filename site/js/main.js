@@ -288,6 +288,18 @@ function showReadout(lat, lon) {
     kids.push(el("div", { className: "sub" }, `${qpf() ? "Liquid range" : "Snow range"}, ${winText(activeWin())}`));
   }
   box.replaceChildren(...kids);
+  placeReadout();
+}
+// The readout sits beside the pointer (or the last tap), flipping to the other side where it would leave the map, and stays with its spot on the map as the map moves.
+function placeReadout() {
+  const box = $("readout");
+  if (!box.firstChild || !map) return;
+  const p = map.latLngToContainerPoint(S.hover || S.pt), size = map.getSize(), w = box.offsetWidth, h = box.offsetHeight, gap = 14, edge = 6;
+  let x = p.x + gap, y = p.y + gap;
+  if (x + w > size.x - edge) x = p.x - w - gap;
+  if (y + h > size.y - edge) y = p.y - h - gap;
+  x = Math.max(edge, Math.min(size.x - w - edge, x)); y = Math.max(edge, Math.min(size.y - h - edge, y));
+  box.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
 }
 const updateReadoutAtPoint = () => { if (S.hover) showReadout(...S.hover); else showReadout(...S.pt); };
 
@@ -486,10 +498,11 @@ async function start() {
   for (const [id] of LAYERS) if (S.layers.has(id)) gis.set(id, true).catch(console.error);
   setPoint(...S.pt, S.ptName);
   initSearch({ input: $("search"), list: $("search-list"), getPlaces: () => places, onPick: goToPlace });
-  map.on("click", e => { setPoint(e.latlng.lat, e.latlng.lng); });
+  map.on("click", e => { S.hover = [e.latlng.lat, e.latlng.lng]; setPoint(e.latlng.lat, e.latlng.lng); if (bundle) showReadout(...S.hover); });   // on a touch screen the tap is the pointer
   map.on("mousemove", e => { S.hover = [e.latlng.lat, e.latlng.lng]; if (bundle) showReadout(...S.hover); });
   map.on("mouseout", () => { S.hover = null; if (bundle) showReadout(...S.pt); });
   map.on("moveend", () => writeHash());
+  map.on("move zoom resize", placeReadout);
   addEventListener("keydown", e => {
     if (e.target.closest("input, select, textarea")) return;
     if (e.key === " " && e.target === document.body) { e.preventDefault(); togglePlay(); }

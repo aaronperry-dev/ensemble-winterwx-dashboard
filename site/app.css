@@ -15,7 +15,7 @@
   --road-i: #1b1b19;  --road-us: #3c3c38;  --road-st: #5d5d57;  --road-casing: rgba(255,255,255,.92);
   --label: #161614;  --label-halo: rgba(252,252,251,.96);
   --band-c: rgba(42,120,214,.09);  --band-a: rgba(42,120,214,.16);  --band-b: rgba(42,120,214,.32);
-  --shadow: 0 1px 2px rgba(11,11,11,.12);
+  --shadow: 0 1px 2px rgba(11,11,11,.12);  --readout-bg: rgba(252,252,251,.8);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -29,7 +29,7 @@
   --road-i: #f6f5ee;  --road-us: #d9d8cf;  --road-st: #b3b2a8;  --road-casing: rgba(0,0,0,.85);
   --label: #e4e3dd;  --label-halo: rgba(13,13,13,.92);
   --band-c: rgba(57,135,229,.11);  --band-a: rgba(57,135,229,.20);  --band-b: rgba(57,135,229,.38);
-  --shadow: 0 1px 2px rgba(0,0,0,.5);
+  --shadow: 0 1px 2px rgba(0,0,0,.5);  --readout-bg: rgba(26,26,25,.8);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -44,7 +44,7 @@
     --road-i: #f6f5ee;  --road-us: #d9d8cf;  --road-st: #b3b2a8;  --road-casing: rgba(0,0,0,.85);
     --label: #e4e3dd;  --label-halo: rgba(13,13,13,.92);
     --band-c: rgba(57,135,229,.11);  --band-a: rgba(57,135,229,.20);  --band-b: rgba(57,135,229,.38);
-    --shadow: 0 1px 2px rgba(0,0,0,.5);
+    --shadow: 0 1px 2px rgba(0,0,0,.5);  --readout-bg: rgba(26,26,25,.8);
   }
 }
 
@@ -132,7 +132,8 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
 .legend.lab .bar i, .legend.lab .ticks span { min-width: 40px; }
 .legend .ticks span + span { margin-left: 2px; }
 
-.readout { position: absolute; right: 12px; top: 12px; z-index: 800; background: var(--surface); border-radius: 8px; padding: 8px 11px; box-shadow: var(--shadow); min-width: 170px; pointer-events: none; font-variant-numeric: tabular-nums; }
+/* The readout follows the pointer (a tap, on a touch screen); main.js moves it with transform.  Its fill is slightly see-through so the field shows faintly behind it. */
+.readout { position: absolute; left: 0; top: 0; z-index: 800; background: var(--readout-bg); -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); border-radius: 8px; will-change: transform; padding: 8px 11px; box-shadow: var(--shadow); min-width: 170px; pointer-events: none; font-variant-numeric: tabular-nums; }
 .readout:empty { display: none; }
 .readout .big { font-size: 22px; font-weight: 700; line-height: 1.15; }
 .readout .big small { font-size: 13px; font-weight: 400; color: var(--ink-2); margin-left: 4px; }
@@ -224,7 +225,7 @@ select { width: 100%; padding: 7px 9px; border: 1px solid var(--axis); border-ra
   .legend .ticks { font-size: 11px; white-space: nowrap; }
   .legend .ticks span { transform: translateX(-50%); text-align: left; }
   .legend .ticks span:first-child { transform: none; }
-  .readout { top: 8px; right: 8px; bottom: auto; min-width: 0; padding: 6px 10px; max-width: calc(100% - 64px); }
+  .readout { min-width: 0; padding: 6px 10px; max-width: calc(100% - 64px); }
   .readout .big { font-size: 19px; }
   .readout .trio { gap: 8px; font-size: 12.5px; margin-top: 2px; }
   .readout .sub { display: none; }
