@@ -26,6 +26,9 @@ on:
       max_fhr:
         description: "Last forecast hour (multiple of 6)"
         default: "168"
+      blend_weights:
+        description: "Weights of the systems in the combined view: equal (default), members (by member count) or e.g. eps=50,gefs=30,geps=20"
+        default: "equal"
       fresh_data:
         description: "Ignore the cached model downloads and finished data files and fetch everything again"
         type: boolean
@@ -102,13 +105,14 @@ jobs:
           FRESH: ${{ inputs.fresh_data }}
           ENSEMBLES: ${{ inputs.ensembles || 'eps,gefs,geps' }}
           MAX_FHR: ${{ inputs.max_fhr || '168' }}
+          BLEND_WEIGHTS: ${{ inputs.blend_weights || 'equal' }}
           TQDM_DISABLE: "1"          # no download progress bars: they made the log ~100x larger and hid the real messages
         run: |
           pages_url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
           skip=(--skip-if-deployed "$pages_url")
           [ "$FORCE" = "true" ] && skip=()
           [ "$FRESH" = "true" ] && skip+=(--no-cache)
-          python -m ensemble_snow.build --out public --cache .cache --ensembles "$ENSEMBLES" --max-fhr "$MAX_FHR" "${skip[@]}"
+          python -m ensemble_snow.build --out public --cache .cache --ensembles "$ENSEMBLES" --max-fhr "$MAX_FHR" --blend-weights "$BLEND_WEIGHTS" "${skip[@]}"
           if [ -f public/index.html ]; then echo "publish=true" >> "$GITHUB_OUTPUT"; else echo "publish=false" >> "$GITHUB_OUTPUT"; fi
 
       # Save the model data even when a later step failed (a retry then does not download again).  Skipped when nothing changed.
