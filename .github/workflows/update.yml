@@ -75,6 +75,7 @@ jobs:
       # Model data kept between runs so that a change to the page (or to the statistics) does not download the model again:
       #   .cache/decoded  the newest EPS / GEFS / GEPS download already reduced to the New England grid (~100-200 MB instead of ~18 GB of GRIB)
       #   .cache/bundles  the finished data files of the last build (~10 MB), reused when only the page changed
+      #   .cache/parts    GEPS forecast hours already downloaded, so an attempt that failed half way resumes instead of starting over
       # GitHub caches are immutable, so every run that changes the data saves a new snapshot; the newest one is restored and GitHub
       # evicts the oldest ones on its own.  Nothing of this is committed or published.
       - name: Restore cached model data
@@ -84,13 +85,14 @@ jobs:
           path: |
             .cache/decoded
             .cache/bundles
+            .cache/parts
           key: data-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: data-${{ runner.os }}-
 
       - name: Remember what the cache holds
         id: cache_before
         if: ${{ !inputs.probe }}
-        run: echo "sig=$(find .cache/decoded .cache/bundles -type f -printf '%p %s\n' 2>/dev/null | sort | sha1sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "sig=$(find .cache/decoded .cache/bundles .cache/parts -type f -printf '%p %s\n' 2>/dev/null | sort | sha1sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - name: Build site
         id: build
@@ -114,7 +116,7 @@ jobs:
         id: cache_after
         if: ${{ always() && !inputs.probe }}
         run: |
-          now=$(find .cache/decoded .cache/bundles -type f -printf '%p %s\n' 2>/dev/null | sort | sha1sum | cut -c1-16)
+          now=$(find .cache/decoded .cache/bundles .cache/parts -type f -printf '%p %s\n' 2>/dev/null | sort | sha1sum | cut -c1-16)
           if [ "$now" != "${{ steps.cache_before.outputs.sig }}" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; fi
 
       - name: Save model data for the next run
@@ -124,6 +126,7 @@ jobs:
           path: |
             .cache/decoded
             .cache/bundles
+            .cache/parts
           key: data-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - uses: actions/configure-pages@v5
