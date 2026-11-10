@@ -18,14 +18,15 @@ fetch GRIB2 ──► regrid to 0.25° New England grid ──► snow per membe
 
 ## What the page shows
 
-* **Amount** – the minimum, 5th, 10th, 25th, 50th (median), mean, 75th, 90th, 95th percentile or maximum member, for an accumulation period of **3, 6, 12, 24 or 48 hours, or the run total**. Time is a **slider in 3-hour steps** to F+144 h, then 6-hourly to F+168 h (ECMWF publishes 6-hourly fields after F+144 h, so 3-hour totals end there). A period only appears at times when it is complete: a 24-hour total starts at F+24 h.
+* **Amount** – the minimum, 5th, 10th, 25th, 50th (the median), mean, 75th, 90th, 95th percentile or maximum member, for an accumulation period of **3, 6, 12, 24 or 48 hours, or the run total**. Time is a **slider in 3-hour steps** to F+144 h, then 6-hourly to F+168 h (ECMWF publishes 6-hourly fields after F+144 h, so 3-hour totals end there). A period only appears at times when it is complete: a 24-hour total starts at F+24 h.
 * **Consensus** – four ways of drawing one map that keeps realistic amounts (see below): **PMM**, **LPMM**, **SAM** and **SAM–LPM**.
 * **Chance** – the share of members reaching 0.1, 1, 2, 3, 4, 6, 8, 12, 18 or 24 in in the chosen period (the edges of the NWS snowfall legend).
 * **Ratio** – the effective snow-to-liquid ratio of the chosen method (mean member).
 * Colours: snowfall uses the NWS "Total Snow Forecast" legend of the Portland/Gray office (sampled from its map) in both appearances; chances use ColorBrewer **BuPu**, a cool sequential ramp that cannot be mistaken for the amounts.
 * Ensemble: EPS, GEFS, GEPS, or **All** (the three pooled; each system carries equal total weight, so the 21 GEPS members count for more apiece than the 50-51 EPS members).
 * Snow-to-liquid method (see below), per system.
-* A bottom dock with the time slider and a **fan chart** (5–95 %, 10–90 % and 25–75 % bands, median, mean, maximum) for the point you click. The chart is a second time control (click or drag it); ←/→ step the slider. A table view of all 14 statistics at the point is one button away.
+* A bottom dock with the time slider and a **fan chart** (5–95 %, 10–90 % and 25–75 % bands, 50th percentile, mean, maximum) for the point you click. The chart is a second time control (click or drag it); ←/→ step the slider. A table view of all 14 statistics at the point is one button away.
+* **Town search** – the box in the header completes town and city names as you type (add a state to narrow it: "wilton nh"). Picking one moves the chosen point and the map there; the chart and the readout then show the ensemble values at that point. The name is kept in the URL.
 * Layers: counties, state lines, highways with route shields, towns, peaks, ski areas. Light and dark appearance. All state is in the URL hash, so a view can be shared.
 
 ## Run it locally
@@ -149,7 +150,7 @@ tests/               pytest (+ node decoder check)
 
 ## Credits and licences
 
-Forecast data: ECMWF open data (CC BY 4.0), NOAA/NCEP (US government work), ECCC/MSC (Open Government Licence – Canada). Basemap: Natural Earth (public domain). Places and peaks: GeoNames (CC BY 4.0) and the lists inherited from the reference RRFS winter viewer. Leaflet (BSD-2-Clause) and Atkinson Hyperlegible Next (SIL OFL 1.1) are vendored with their licences. SLR formulas are generalised from that reference project; see the references in `ensemble_snow/slr.py`.
+Forecast data: ECMWF open data (CC BY 4.0), NOAA/NCEP (US government work), ECCC/MSC (Open Government Licence – Canada). Basemap: Natural Earth (public domain). Places and peaks: GeoNames (CC BY 4.0, places of 500 people or more), about 900 further town and village names from public ZIP-code place lists (`ensemble_snow/data/places.csv`, population 0 = not on file), and the lists inherited from the reference RRFS winter viewer. Leaflet (BSD-2-Clause) and Atkinson Hyperlegible Next (SIL OFL 1.1) are vendored with their licences. SLR formulas are generalised from that reference project; see the references in `ensemble_snow/slr.py`.
 
 ## Terrain adjustment (experimental, off by default)
 
