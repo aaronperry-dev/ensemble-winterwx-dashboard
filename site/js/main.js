@@ -28,7 +28,7 @@ const CONS = [
   ["samlpm", "SAM–LPM", "Spatially aligned mean with local probability matching (SAM–LPM)", "SAM, then local probability matching: the aligned position of SAM with the realistic peak amounts of LPMM. Experimental."]];
 const CONS_CAUTION = "Consensus maps show one plausible picture, not the likeliest outcome at every point, and they do not conserve totals. Use the percentiles and chances for point decisions.";
 const GROUPS = { blend: "Consensus", method: "Methods", reference: "Simple references" };
-const LAYERS = [["counties", "Counties", true], ["states", "State lines", true], ["roads", "Highways", true], ["places", "Towns", true], ["peaks", "Peaks", false], ["ski", "Ski areas", false]];
+const LAYERS = [["counties", "Counties", true], ["states", "State lines", true], ["roads", "Highways and shields", true], ["water", "Hide model over water", true], ["places", "Towns", true], ["peaks", "Peaks", false], ["ski", "Ski areas", false]];
 const DEFAULT_PT = [42.3584, -71.0598];
 const DAYS = d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
 const winText = w => (w ? `${w}-hour` : "storm-total");
