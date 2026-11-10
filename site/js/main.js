@@ -34,6 +34,7 @@ const DAYS = d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay(
 const winText = w => (w ? `${w}-hour` : "storm-total");
 
 const S = { ens: "eps", method: "blend", prod: "pct", stat: "p50", cons: "pmm", thr: 1, win: 0, t: 0, pt: DEFAULT_PT, smooth: true, terrain: false, tk: 6, opacity: 0.85, dark: false, layers: new Set(LAYERS.filter(l => l[2]).map(l => l[0])) };
+const tried = new Set();
 let TERR = null, M, GRID, map, field, gis, chart, scale, bundle, places = [], playing = null, token = 0;
 const cache = new Map();
 
@@ -81,8 +82,19 @@ async function refresh(full = true) {
   const pending = !cache.has(key());
   if (pending) loading.hidden = false;
   try { bundle = await getBundle(); }
-  catch (e) { loading.hidden = false; loading.textContent = "Could not load this dataset. Try another method or reload."; console.error(e); return; }
+  catch (e) {
+    console.error(e);
+    tried.add(key());
+    const alt = [[S.ens, "blend"], ...["all", "eps", "gefs", "geps"].map(k => [k, "blend"])].find(([k, m]) => M.ensembles[k]?.files[m] && !tried.has(`${k}_${m}`));
+    if (alt && my === token) {                      // a file that will not load: show the next best data rather than an empty map
+      S.notice = `${shortName(S.ens)} / ${S.method} could not be loaded, so ${shortName(alt[0])} is shown instead.`;
+      [S.ens, S.method] = alt; mark($("ens"), S.ens); buildMethods(); S.t = snapTime(Math.min(S.t, E().fhrs.length - 1)); buildWindows(); buildTime(); ensNote(); runline();
+      return refresh(full);
+    }
+    loading.hidden = false; loading.textContent = "Could not load this dataset. Reload the page to try again."; return;
+  }
   if (my !== token) return;
+  tried.clear();
   loading.hidden = true; loading.textContent = "Loading";
   paint(); if (full) updateChart(); updateReadoutAtPoint(); writeHash();
 }
@@ -159,6 +171,17 @@ const snapTime = i => { const v = validIdx(); return !v.length || v.includes(i) 
 const localStamp = ms => {
   try { return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(ms); } catch { return ""; }
 };
+const shortName = k => M.ensembles[k]?.short || k.toUpperCase();
+// The combined view pools whichever systems have data at each hour; say so when that is fewer than the build has.
+function blendNote() {
+  const n = $("blend-now"), e = E();
+  let t = "";
+  if (S.ens === "all" && e.contrib) {
+    const here = (e.contrib[S.t] || "").split(",").filter(Boolean), absent = Object.keys(M.ensembles).filter(k => k !== "all" && !here.includes(k));
+    if (absent.length) t = `Blend of ${here.map(shortName).join(" + ") || "nothing"} only: ${absent.map(shortName).join(", ")} ${absent.length > 1 ? "have" : "has"} no data for this hour`;
+  }
+  n.textContent = t; n.hidden = !t; n.title = t;
+}
 function timeLabels() {
   const ms = validMs(S.t), f = E().fhrs[S.t], w = activeWin(), v = validIdx(), pos = Math.max(0, v.indexOf(S.t));
   $("when-utc").textContent = `Valid ${stamp(ms)} · F+${String(f).padStart(3, "0")} h`;
@@ -166,7 +189,7 @@ function timeLabels() {
   const lt = localStamp(ms), what = w ? `${w}-hour snow from ${stamp(ms - w * 3600e3)} to ${stamp(ms)}` : `Snow since the run began, ${stamp(Date.parse(E().init))}`;
   $("when-local").textContent = (lt ? `${lt} in New England · ` : "") + what; $("when-local").title = $("when-local").textContent;
   const t = $("time"); t.value = pos; t.setAttribute("aria-valuetext", `${stamp(ms)}, forecast hour ${f}`);
-  chart?.setIndex(pos);
+  chart?.setIndex(pos); blendNote();
 }
 function buildTime() {
   const v = validIdx(), t = $("time"), days = $("days");
@@ -259,7 +282,7 @@ const updateReadoutAtPoint = () => { if (S.hover) showReadout(...S.hover); else 
 
 // ---------- controls ----------
 function buildControls() {
-  radio($("ens"), Object.keys(M.ensembles).map(k => [k, M.ensembles[k].short, k === "all" ? "pooled" : `${M.ensembles[k].members} mem.`]), S.ens, v => { S.ens = v; onEnsChange(); });
+  radio($("ens"), Object.keys(M.ensembles).map(k => [k, M.ensembles[k].short, k === "all" ? "pooled" : `${M.ensembles[k].members} mem.`]), S.ens, v => { switchEns(v); });
   buildMethods(); buildProd();
   buildWindows();
   $("time").addEventListener("input", e => { togglePlay(false); const v = validIdx(); setTime(v[+e.target.value]); });
@@ -329,6 +352,15 @@ function buildProd() {
   noteFor();
   $("win-wrap").hidden = S.prod === "slr";
 }
+// Another ensemble has its own list of forecast hours, so the same valid time is looked up in it rather than the same position.
+function switchEns(k) {
+  const ms = validMs(S.t);
+  S.ens = k; S.notice = "";
+  let best = 0;
+  E().fhrs.forEach((_, i) => { if (Math.abs(validMs(i) - ms) < Math.abs(validMs(best) - ms)) best = i; });
+  S.t = best;
+  onEnsChange();
+}
 function onEnsChange() {
   mark($("ens"), S.ens);
   if (!E().methods.includes(S.method)) S.method = "blend";
@@ -339,15 +371,18 @@ function ensNote() {
   const e = E(), n = $("ens-note");
   n.replaceChildren(`${e.center}, ${e.native}. Precipitation type: ${e.ptype}.`);
   for (const t of e.notes.filter(t => !t.startsWith("Synthetic"))) n.append(el("br"), t);
+  const gone = ["eps", "gefs", "geps"].filter(k => !M.ensembles[k]).map(k => k.toUpperCase());
+  if (gone.length) n.append(el("br"), `Not in this build (no complete run could be loaded): ${gone.join(", ")}.${M.ensembles.all ? "" : " There is nothing to blend until a second system is available."}`);
+  if (S.notice) n.append(el("br"), S.notice);
 }
 function runline() {
   const e = E(), d = new Date(e.init), gen = new Date(M.generated);
   const f = x => `${DAYS(x)} ${x.getUTCDate()} ${x.toLocaleString("en-US", { month: "short", timeZone: "UTC" })}`;
-  $("runline").textContent = `${e.short} run of ${String(d.getUTCHours()).padStart(2, "0")} UTC ${f(d)}, to F+${e.fhrs.at(-1)} h. Page built ${String(gen.getUTCHours()).padStart(2, "0")}:${String(gen.getUTCMinutes()).padStart(2, "0")} UTC ${f(gen)}.`;
+  $("runline").textContent = `${e.short} run of ${String(d.getUTCHours()).padStart(2, "0")} UTC ${f(d)}, to F+${e.fhrs.at(-1)} h${(e.systems || []).some(x => x.init !== e.init) ? ` (${e.systems.map(x => `${x.short} ${String(new Date(x.init).getUTCHours()).padStart(2, "0")} UTC ${f(new Date(x.init))}`).join(", ")})` : ""}. Page built ${String(gen.getUTCHours()).padStart(2, "0")}:${String(gen.getUTCMinutes()).padStart(2, "0")} UTC ${f(gen)}.`;
 }
 function credits() {
   const p = $("credits"); p.replaceChildren();
-  for (const k of ["eps", "gefs", "geps"]) { const e = M.ensembles[k]; p.append(el("a", { href: e.url, target: "_blank", rel: "noopener" }, e.short), ` ${e.center}, ${e.license}. `); }
+  for (const k of ["eps", "gefs", "geps"]) { const e = M.ensembles[k]; if (e) p.append(el("a", { href: e.url, target: "_blank", rel: "noopener" }, e.short), ` ${e.center}, ${e.license}. `); }
   p.append("Basemap: Natural Earth (public domain). Places and peaks: GeoNames (CC BY 4.0), with further town names from public ZIP-code data. Ratios computed on a 0.25° grid, so terrain is smoothed.");
 }
 
@@ -373,6 +408,7 @@ function goToPlace(p) {
 async function start() {
   const res = await fetch("data/manifest.json"); M = await res.json(); GRID = M.grid;
   if (M.synthetic) $("demo-banner").hidden = false;
+  S.ens = M.ensembles.all ? "all" : Object.keys(M.ensembles)[0];                 // the blend when there is one; a build can lack a family (a download that failed)
   TERR = null;
   if (M.terrain) { try { TERR = await loadTerrain(`data/${M.terrain.file}`); } catch (e) { console.error(e); } }
   $("terrain-sec").hidden = !TERR; if (!TERR) S.terrain = false;
