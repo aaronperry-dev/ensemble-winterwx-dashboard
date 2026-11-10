@@ -65,6 +65,7 @@ Changing the page (anything in `site/`) or the statistics / snow-ratio code does
 | Cache | Holds | Used when |
 |---|---|---|
 | `.cache/bundles` | the finished data files of the last build (~10 MB) | the Python pipeline and the model runs are unchanged, i.e. only `site/` changed: the build finishes in about a minute |
+| `.cache/parts` | GEPS forecast hours already downloaded (a few MB each) | an attempt that failed half way: the next one fetches only the hours still missing |
 | `.cache/decoded` | the newest download of each system, already reduced to the New England grid (~100-200 MB) | the fetchers, GRIB reader, grid and level settings are unchanged (`sources/*.py`, `grib.py`, `regrid.py`, `accum.py`, `thermo.py`, `http.py`, `fields.py`, grid settings in `config.py`): products are recomputed from it without any download |
 
 A new model run, a change to the fetch code, or a corrupt / missing cache falls back to downloading.  To force a full refetch run the workflow by hand with **fresh_data** ticked (locally: `--no-cache`).  The caches keep only the newest download of each system, and GitHub evicts old snapshots by itself.
@@ -132,6 +133,7 @@ The model fetchers (`sources/eps.py`, `gefs.py`, `geps.py`) were written from th
 * GEPS `ASNOW` units, `PRES_SFC_0` availability and `HGT` units (guarded by a plausibility check and unit autodetection).
 * **Volume.** An EPS run at F+168 is on the order of 20 GB of GRIB2 through the client; GEFS reads only the needed byte ranges. This is heavy for a hosted runner. `--max-fhr 120`, fewer members or fewer variables are the first levers.
 * MSC Datamart keeps only a short window of runs, so a missed build cannot be recovered later for GEPS.
+* GEPS reliability.  GitHub's runners are sometimes refused by `dd.weather.gc.ca` (connections time out).  Connections give up after 15 s; six failed connections in a row mark a host down for a minute (`http.Fetcher`), and each file is then tried on the next server (`geps.MIRRORS`: `dd` /today, `hpfx.collab.science.gc.ca` dated, `dd` dated; the one that last worked goes first).  GEPS downloads use 4 connections, hours that fail are retried twice after a pause, and the whole download stops after 25 minutes.  Whatever arrived is used: the run is marked `partial` in the manifest (with a note on the page), is not stored as a finished download and never counts as "already deployed", so the next scheduled build tries again and resumes from `.cache/parts`.  A system whose data end before 60 % of the longest one's (`BLEND_MIN_SHARE`) stays in its own view but is left out of **All**, so it cannot cut the pooled forecast short.  The mirror paths were written from MSC's directory conventions and could not be tried from the sandbox.
 
 ## Caveats
 
