@@ -7,6 +7,12 @@ name: Update snowfall ensemble dashboard
 on:
   push:
     branches: [main]
+    # Uploads that cannot change the site (docs, tests) no longer start a build, so they cannot queue behind or cancel a real one.
+    paths-ignore:
+      - "**.md"
+      - "tests/**"
+      - "LICENSE"
+      - ".gitignore"
   schedule:
     - cron: "30 8,20 * * *"
     - cron: "30 9,10,21,22 * * *"
